@@ -1,0 +1,18 @@
+2023-03-08 15:24:19,667 [INFO   ] [APP] autotrader2 started with arguments={rtg.py, run, autotrader2.py}
+2023-03-08 15:24:19,667 [INFO   ] [APP] configuration={"Execution":{"Host":"127.0.0.1","Port":12345},"Information":{"Type":"mmap","Name":"info.dat"},"TeamName":"ETHomies","Secret":"secret"}
+2023-03-08 15:24:19,677 [INFO   ] [CONNECTION] fd=17 connection established: peer=127.0.0.1:12345
+2023-03-08 15:24:19,682 [INFO   ] [CONNECTION] fd=17 connection lost
+2023-03-08 15:24:19,683 [INFO   ] [APP] closing event loop
+2023-03-08 15:24:19,683 [INFO   ] [RECEIVER] connection lost
+2023-03-08 15:46:46,950 [INFO   ] [APP] autotrader2 started with arguments={rtg.py, run, autotrader2.py}
+2023-03-08 15:46:46,950 [INFO   ] [APP] configuration={"Execution":{"Host":"127.0.0.1","Port":12345},"Information":{"Type":"mmap","Name":"info.dat"},"TeamName":"ETHomies","Secret":"secret"}
+2023-03-08 15:46:46,955 [INFO   ] [CONNECTION] fd=17 connection established: peer=127.0.0.1:12345
+2023-03-08 15:46:46,960 [INFO   ] [CONNECTION] fd=17 connection lost
+2023-03-08 15:46:46,960 [INFO   ] [APP] closing event loop
+2023-03-08 15:46:46,961 [INFO   ] [RECEIVER] connection lost
+2023-03-08 15:47:52,342 [INFO   ] [APP] autotrader2 started with arguments={rtg.py, run, autotrader2.py}
+2023-03-08 15:47:52,342 [INFO   ] [APP] configuration={"Execution":{"Host":"127.0.0.1","Port":12345},"Information":{"Type":"mmap","Name":"info.dat"},"TeamName":"ETHomies","Secret":"secret"}
+2023-03-08 15:47:52,352 [INFO   ] [CONNECTION] fd=17 connection established: peer=127.0.0.1:12345
+2023-03-08 15:47:52,357 [INFO   ] [CONNECTION] fd=17 connection lost
+2023-03-08 15:47:52,357 [INFO   ] [APP] closing event loop
+2023-03-08 15:47:52,357 [INFO   ] [RECEIVER] connection lost
