@@ -7,6 +7,6 @@
     "Type": "mmap",
     "Name": "info.dat"
   },
-  "TeamName": "naive_autotrader",
+  "TeamName": "margin_lots_autotrader",
   "Secret": "secret"
 }
