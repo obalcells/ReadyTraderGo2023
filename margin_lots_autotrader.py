@@ -18,18 +18,20 @@
 import asyncio
 import itertools
 import numpy as np
+import json
 from typing import List
 from ready_trader_go import BaseAutoTrader, Instrument, Lifespan, MAXIMUM_ASK, MINIMUM_BID, Side
 
-
-LOT_SIZE = 10
+f = open('test_configuration.json')
+data = json.load(f)
+LOT_SIZE = data["LOT_SIZE"]
 POSITION_LIMIT = 100
 TICK_SIZE_IN_CENTS = 100
 MIN_BID_NEAREST_TICK = (MINIMUM_BID + TICK_SIZE_IN_CENTS) // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
 MAX_ASK_NEAREST_TICK = MAXIMUM_ASK // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
-HIST_LENGTH = 10
+HIST_LENGTH = data["HIST_LENGTH"]
 WEIGHTS = [4*i*i*i/100 for i in range(1, HIST_LENGTH+1)]
-
+f.close()
 
 class AutoTrader(BaseAutoTrader):
     """Example Auto-trader.
@@ -43,6 +45,8 @@ class AutoTrader(BaseAutoTrader):
 
     def __init__(self, loop: asyncio.AbstractEventLoop, team_name: str, secret: str):
         """Initialise a new instance of the AutoTrader class."""
+        f = open('test_configuration.json')
+        data = json.load(f)
         super().__init__(loop, team_name, secret)
         self.order_ids = itertools.count(1)
         self.current_max_bid_hedge = 0
@@ -50,9 +54,13 @@ class AutoTrader(BaseAutoTrader):
         self.fut_mid_price_hist = []
         self.bids = set()
         self.asks = set()
+        self.delta = data["delta"]
+        self.margin = data["margin"]
+        self.preferred_lots_low = data["preferred_lots_low"]
+        self.preferred_lots_high = data["preferred_lots_high"]
         self.lots_traded = LOT_SIZE
         self.ask_id = self.ask_price = self.bid_id = self.bid_price = self.position = 0
-
+        f.close()
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
 
@@ -97,11 +105,9 @@ class AutoTrader(BaseAutoTrader):
 
         if instrument == Instrument.ETF and self.current_max_bid_hedge != 0:
             #self.logger.info("received order book for ETF")
-            delta = 0
-            margin = 0
             if len(self.fut_mid_price_hist) == HIST_LENGTH:
-                margin = np.average(self.fut_mid_price_hist)*0.001 #in % of self.fut_mid_price_hist
-            price_adjustment = delta * TICK_SIZE_IN_CENTS # is this the smallest adjustment you can make?
+                self.margin = np.average(self.fut_mid_price_hist)*0.001 #in % of self.fut_mid_price_hist
+            price_adjustment = self.delta * TICK_SIZE_IN_CENTS # is this the smallest adjustment you can make?
             new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
             new_ask_price = ask_prices[0] - price_adjustment if ask_prices[0] != 0 else 0
 
@@ -128,17 +134,17 @@ class AutoTrader(BaseAutoTrader):
             if len(self.fut_mid_price_hist) == HIST_LENGTH:
                 lots_weight = np.average(self.fut_mid_price_hist, weights=WEIGHTS)-np.average(self.fut_mid_price_hist)
                 if lots_weight > 0: #should by more
-                    preferred_lots = 11
+                    preferred_lots = self.preferred_lots_high
                 else:               #should by less
-                    preferred_lots = 9
+                    preferred_lots = self.preferred_lots_low
                 if preferred_lots <= available_lots:
                     self.lots_traded = preferred_lots
                 else:
                     self.lots_traded = available_lots
 
-            make_bid = (self.bid_id == 0 and new_bid_price != 0 and self.position + self.lots_traded < POSITION_LIMIT) and new_bid_price - margin < self.current_min_ask_hedge
+            make_bid = (self.bid_id == 0 and new_bid_price != 0 and self.position + self.lots_traded < POSITION_LIMIT) and new_bid_price - self.margin < self.current_min_ask_hedge
 
-            make_ask = (self.ask_id == 0 and new_ask_price != 0 and self.position - self.lots_traded > -POSITION_LIMIT) and new_ask_price + margin > self.current_max_bid_hedge
+            make_ask = (self.ask_id == 0 and new_ask_price != 0 and self.position - self.lots_traded > -POSITION_LIMIT) and new_ask_price + self.margin > self.current_max_bid_hedge
 
             if make_bid:
                 self.bid_id = next(self.order_ids)
