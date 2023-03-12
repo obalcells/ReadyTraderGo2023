@@ -18,18 +18,20 @@
 import asyncio
 import itertools
 import numpy as np
+import json
 from typing import List
 from ready_trader_go import BaseAutoTrader, Instrument, Lifespan, MAXIMUM_ASK, MINIMUM_BID, Side
 
-
-LOT_SIZE = 10
+f = open('test_configuration.json')
+data = json.load(f)
+LOT_SIZE = data["LOT_SIZE"]
 POSITION_LIMIT = 100
 TICK_SIZE_IN_CENTS = 100
 MIN_BID_NEAREST_TICK = (MINIMUM_BID + TICK_SIZE_IN_CENTS) // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
 MAX_ASK_NEAREST_TICK = MAXIMUM_ASK // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
-HIST_LENGTH = 10
+HIST_LENGTH = data["HIST_LENGTH"]
 WEIGHTS = [4*i*i*i/100 for i in range(1, HIST_LENGTH+1)]
-
+f.close()
 
 class AutoTrader(BaseAutoTrader):
     """Example Auto-trader.
@@ -43,6 +45,8 @@ class AutoTrader(BaseAutoTrader):
 
     def __init__(self, loop: asyncio.AbstractEventLoop, team_name: str, secret: str):
         """Initialise a new instance of the AutoTrader class."""
+        f = open('test_configuration.json')
+        data = json.load(f)
         super().__init__(loop, team_name, secret)
         self.order_ids = itertools.count(1)
         self.current_max_bid_hedge = 0
@@ -50,8 +54,13 @@ class AutoTrader(BaseAutoTrader):
         self.fut_mid_price_hist = []
         self.bids = set()
         self.asks = set()
+        self.delta = data["delta"]
+        self.margin = data["margin"]
+        self.preferred_lots_low = data["preferred_lots_low"]
+        self.preferred_lots_high = data["preferred_lots_high"]
         self.lots_traded = LOT_SIZE
         self.ask_id = self.ask_price = self.bid_id = self.bid_price = self.position = 0
+        f.close()
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
