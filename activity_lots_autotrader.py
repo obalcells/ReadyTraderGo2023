@@ -211,7 +211,8 @@ class AutoTrader(BaseAutoTrader):
         self.logger.info("received trade ticks for instrument %d with sequence number %d", instrument,
                          sequence_number)
         #might want to account for trading
-        if len(self.fut_mid_price_hist) == HIST_LENGTH:
-            if not bid_prices[0] == 0 and not ask_prices[0] == 0:
-                self.fut_mid_price_hist.pop(0)
-                self.fut_mid_price_hist.append((bid_prices[0]+ask_prices[0])/2)
+        if len(self.fut_mid_price_hist) == HIST_LENGTH and not bid_prices[0] == 0 and not ask_prices[0] == 0:
+            self.fut_mid_price_hist.pop(0)
+        if not bid_prices[0] == 0 and not ask_prices[0] == 0:
+            self.fut_mid_price_hist.append((bid_prices[0]+ask_prices[0])/2)
+        self.logger.info("size{0}".format(len(self.fut_mid_price_hist)))

@@ -42,6 +42,7 @@
     "lots_autotrader": "secret",
     "margin_autotrader": "secret",
     "competition_autotrader": "secret",
-    "activity_lots_autotrader": "secret"
+    "activity_lots_autotrader": "secret",
+    "standard_deviation_activity_lots_autotrader": "secret"
   }
 }
