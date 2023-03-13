@@ -17,18 +17,17 @@
 #     <https://www.gnu.org/licenses/>.
 import asyncio
 import itertools
-
+import numpy as np
 from typing import List
-
 from ready_trader_go import BaseAutoTrader, Instrument, Lifespan, MAXIMUM_ASK, MINIMUM_BID, Side
-
 
 LOT_SIZE = 10
 POSITION_LIMIT = 100
 TICK_SIZE_IN_CENTS = 100
 MIN_BID_NEAREST_TICK = (MINIMUM_BID + TICK_SIZE_IN_CENTS) // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
 MAX_ASK_NEAREST_TICK = MAXIMUM_ASK // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
-
+HIST_LENGTH = 10
+WEIGHTS = [4*i*i*i/100 for i in range(1, HIST_LENGTH+1)]
 
 class AutoTrader(BaseAutoTrader):
     """Example Auto-trader.
@@ -44,8 +43,17 @@ class AutoTrader(BaseAutoTrader):
         """Initialise a new instance of the AutoTrader class."""
         super().__init__(loop, team_name, secret)
         self.order_ids = itertools.count(1)
+        self.current_max_bid_hedge = 0
+        self.current_min_ask_hedge = 0
+        self.fut_mid_price_hist = []
         self.bids = set()
         self.asks = set()
+        self.delta = 0
+        self.margin_adjustment = 0.0005
+        self.margin = 0
+        self.preferred_lots_low = 9
+        self.preferred_lots_high = 11
+        self.lots_traded = LOT_SIZE
         self.ask_id = self.ask_price = self.bid_id = self.bid_price = self.position = 0
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
@@ -78,34 +86,76 @@ class AutoTrader(BaseAutoTrader):
         price levels.
         """
         self.logger.info("received order book for instrument %d with sequence number %d", instrument,
-                         sequence_number)
-        if instrument == Instrument.FUTURE:
-            price_adjustment = - (self.position // LOT_SIZE) * TICK_SIZE_IN_CENTS
-            new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
-            new_ask_price = ask_prices[0] + price_adjustment if ask_prices[0] != 0 else 0
+                          sequence_number)
 
-            if self.bid_id != 0 and new_bid_price not in (self.bid_price, 0):
+        if instrument == Instrument.FUTURE:
+            if len(self.fut_mid_price_hist) == HIST_LENGTH:
+                self.fut_mid_price_hist.pop(0)
+            self.fut_mid_price_hist.append((bid_prices[0]+ask_prices[0])/2)
+            self.logger.info("received order book for futures with sequence number %d",
+                           sequence_number)
+            self.current_max_bid_hedge = bid_prices[0] if bid_prices[0] != 0 else 0
+            self.current_min_ask_hedge = ask_prices[0] if ask_prices[0] != 0 else 0
+            self.logger.info("MAX_BID is %d and MIN_ASK is %d", self.current_max_bid_hedge, self.current_min_ask_hedge)
+
+        if instrument == Instrument.ETF and self.current_max_bid_hedge != 0:
+            self.logger.info("received order book for ETF")
+            if len(self.fut_mid_price_hist) == HIST_LENGTH:
+                self.margin = np.average(self.fut_mid_price_hist)*self.margin_adjustment #in % of self.fut_mid_price_hist
+            price_adjustment = self.delta * TICK_SIZE_IN_CENTS # is this the smallest adjustment you can make?
+            new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
+            new_ask_price = ask_prices[0] - price_adjustment if ask_prices[0] != 0 else 0
+
+            # if FUTURES_PRICE > ETF_PRICE + margin:
+            #     ONLY BID IN THE ETF ORDE BOOK (WITHOUT SURPASSING POSITION LIMIT)
+            # else:
+            #     ONLY SELL IN THE ETF ORDER BOOK
+            
+            #might want to account for margin here
+            cancel_bid = (self.bid_id != 0 and new_bid_price not in (self.bid_price, 0)) or (self.bid_id != 0 and self.bid_price > self.current_min_ask_hedge)
+            cancel_ask = (self.ask_id != 0 and new_ask_price not in (self.ask_price, 0)) or (self.ask_id != 0 and self.ask_price < self.current_max_bid_hedge)
+
+            if cancel_bid:
                 self.send_cancel_order(self.bid_id)
                 self.bid_id = 0
-            if self.ask_id != 0 and new_ask_price not in (self.ask_price, 0):
+            if cancel_ask:
                 self.send_cancel_order(self.ask_id)
                 self.ask_id = 0
 
-            if self.bid_id == 0 and new_bid_price != 0 and self.position < POSITION_LIMIT:
+            #calculate lot size
+            #need to think about something more involved
+            #this might be very bad, locks algorithm into trend
+            available_lots = POSITION_LIMIT-self.position
+            if len(self.fut_mid_price_hist) == HIST_LENGTH:
+                lots_weight = np.average(self.fut_mid_price_hist, weights=WEIGHTS)-np.average(self.fut_mid_price_hist)
+                if lots_weight > 0: #should by more
+                    preferred_lots = 11
+                else:               #should by less
+                    preferred_lots = 9
+                if preferred_lots <= available_lots:
+                    self.lots_traded = preferred_lots
+                else:
+                    self.lots_traded = available_lots
+
+            make_bid = (self.bid_id == 0 and new_bid_price != 0 and self.position + self.lots_traded < POSITION_LIMIT) and new_bid_price < self.current_min_ask_hedge
+
+            make_ask = (self.ask_id == 0 and new_ask_price != 0 and self.position - self.lots_traded > -POSITION_LIMIT) and new_ask_price > self.current_max_bid_hedge
+
+            if make_bid:
                 self.bid_id = next(self.order_ids)
                 self.bid_price = new_bid_price
-                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
+                self.send_insert_order(self.bid_id, Side.BUY, new_bid_price, self.lots_traded, Lifespan.GOOD_FOR_DAY)
                 self.bids.add(self.bid_id)
 
-            if self.ask_id == 0 and new_ask_price != 0 and self.position > -POSITION_LIMIT:
+            if make_ask:
                 self.ask_id = next(self.order_ids)
                 self.ask_price = new_ask_price
-                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, LOT_SIZE, Lifespan.GOOD_FOR_DAY)
+                self.send_insert_order(self.ask_id, Side.SELL, new_ask_price, self.lots_traded, Lifespan.GOOD_FOR_DAY)
                 self.asks.add(self.ask_id)
 
     def on_order_filled_message(self, client_order_id: int, price: int, volume: int) -> None:
         """Called when one of your orders is filled, partially or fully.
-
+        LOT_SIZE
         The price is the price at which the order was (partially) filled,
         which may be better than the order's limit price. The volume is
         the number of lots filled at that price.
@@ -115,6 +165,7 @@ class AutoTrader(BaseAutoTrader):
         if client_order_id in self.bids:
             self.position += volume
             self.send_hedge_order(next(self.order_ids), Side.ASK, MIN_BID_NEAREST_TICK, volume)
+
         elif client_order_id in self.asks:
             self.position -= volume
             self.send_hedge_order(next(self.order_ids), Side.BID, MAX_ASK_NEAREST_TICK, volume)
@@ -155,3 +206,4 @@ class AutoTrader(BaseAutoTrader):
         """
         self.logger.info("received trade ticks for instrument %d with sequence number %d", instrument,
                          sequence_number)
+

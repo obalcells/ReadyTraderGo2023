@@ -55,7 +55,8 @@ class AutoTrader(BaseAutoTrader):
         self.bids = set()
         self.asks = set()
         self.delta = data["delta"]
-        self.margin = data["margin"]
+        self.margin_adjustment = data["margin_adjustment"]
+        self.margin = 0
         self.preferred_lots_low = data["preferred_lots_low"]
         self.preferred_lots_high = data["preferred_lots_high"]
         self.lots_traded = LOT_SIZE
@@ -106,11 +107,9 @@ class AutoTrader(BaseAutoTrader):
 
         if instrument == Instrument.ETF and self.current_max_bid_hedge != 0:
             #self.logger.info("received order book for ETF")
-            delta = 0
-            margin = 0
             if len(self.fut_mid_price_hist) == HIST_LENGTH:
-                margin = np.average(self.fut_mid_price_hist)*0.001 #in % of self.fut_mid_price_hist
-            price_adjustment = delta * TICK_SIZE_IN_CENTS # is this the smallest adjustment you can make?
+                self.margin = np.average(self.fut_mid_price_hist)*self.margin_adjustment #in % of self.fut_mid_price_hist
+            price_adjustment = self.delta * TICK_SIZE_IN_CENTS # is this the smallest adjustment you can make?
             new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
             new_ask_price = ask_prices[0] - price_adjustment if ask_prices[0] != 0 else 0
 
@@ -130,9 +129,9 @@ class AutoTrader(BaseAutoTrader):
                 self.send_cancel_order(self.ask_id)
                 self.ask_id = 0         
 
-            make_bid = (self.bid_id == 0 and new_bid_price != 0 and self.position + self.lots_traded < POSITION_LIMIT) and new_bid_price - margin < self.current_min_ask_hedge
+            make_bid = (self.bid_id == 0 and new_bid_price != 0 and self.position + self.lots_traded < POSITION_LIMIT) and new_bid_price - self.margin < self.current_min_ask_hedge
 
-            make_ask = (self.ask_id == 0 and new_ask_price != 0 and self.position - self.lots_traded > -POSITION_LIMIT) and new_ask_price + margin > self.current_max_bid_hedge
+            make_ask = (self.ask_id == 0 and new_ask_price != 0 and self.position - self.lots_traded > -POSITION_LIMIT) and new_ask_price + self.margin > self.current_max_bid_hedge
 
             if make_bid:
                 self.bid_id = next(self.order_ids)
@@ -148,13 +147,13 @@ class AutoTrader(BaseAutoTrader):
 
     def on_order_filled_message(self, client_order_id: int, price: int, volume: int) -> None:
         """Called when one of your orders is filled, partially or fully.
-        LOT_SIZE
+        LOT_SIZEimport json
         The price is the price at which the order was (partially) filled,
         which may be better than the order's limit price. The volume is
         the number of lots filled at that price.
         """
-        self.logger.info("received order filled for order %d with price %d and volume %d", client_order_id,
-                         price, volume)
+        #self.logger.info("received order filled for order %d with price %d and volume %d", client_order_id,
+         #                price, volume)
         if client_order_id in self.bids:
             self.position += volume
             self.send_hedge_order(next(self.order_ids), Side.ASK, MIN_BID_NEAREST_TICK, volume)
@@ -174,8 +173,8 @@ class AutoTrader(BaseAutoTrader):
 
         If an order is cancelled its remaining volume will be zero.
         """
-        self.logger.info("received order status for order %d with fill volume %d remaining %d and fees %d",
-                         client_order_id, fill_volume, remaining_volume, fees)
+        #self.logger.info("received order status for order %d with fill volume %d remaining %d and fees %d",
+         #                client_order_id, fill_volume, remaining_volume, fees)
         if remaining_volume == 0:
             if client_order_id == self.bid_id:
                 self.bid_id = 0
@@ -197,6 +196,6 @@ class AutoTrader(BaseAutoTrader):
         If there are less than five prices on a side, then zeros will appear at
         the end of both the prices and volumes arrays.
         """
-        self.logger.info("received trade ticks for instrument %d with sequence number %d", instrument,
-                         sequence_number)
+       # self.logger.info("received trade ticks for instrument %d with sequence number %d", instrument,
+        #                 sequence_number)
 

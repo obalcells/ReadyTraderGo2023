@@ -55,13 +55,13 @@ class AutoTrader(BaseAutoTrader):
         self.bids = set()
         self.asks = set()
         self.delta = data["delta"]
-        self.margin = data["margin"]
+        self.margin_adjustment = data["margin_adjustment"]
+        self.margin = 0
         self.preferred_lots_low = data["preferred_lots_low"]
         self.preferred_lots_high = data["preferred_lots_high"]
         self.lots_traded = LOT_SIZE
         self.ask_id = self.ask_price = self.bid_id = self.bid_price = self.position = 0
         f.close()
-
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
@@ -107,11 +107,9 @@ class AutoTrader(BaseAutoTrader):
 
         if instrument == Instrument.ETF and self.current_max_bid_hedge != 0:
             #self.logger.info("received order book for ETF")
-            delta = 0
-            margin = 0
             if len(self.fut_mid_price_hist) == HIST_LENGTH:
-                margin = np.average(self.fut_mid_price_hist)*0.001 #in % of self.fut_mid_price_hist
-            price_adjustment = delta * TICK_SIZE_IN_CENTS # is this the smallest adjustment you can make?
+                self.margin = np.average(self.fut_mid_price_hist)*self.margin_adjustment #in % of self.fut_mid_price_hist
+            price_adjustment = self.delta * TICK_SIZE_IN_CENTS # is this the smallest adjustment you can make?
             new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
             new_ask_price = ask_prices[0] - price_adjustment if ask_prices[0] != 0 else 0
 
