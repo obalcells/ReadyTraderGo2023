@@ -55,7 +55,7 @@ class AutoTrader(BaseAutoTrader):
         self.fut_mid_price_hist = []
         self.bids = set()
         self.asks = set()
-        self.standard_deviation
+        self.standard_deviation = None
         self.delta = data["delta"]
         self.margin_adjustment = data["margin_adjustment"]
         self.margin = 0
@@ -218,5 +218,5 @@ class AutoTrader(BaseAutoTrader):
         if not bid_prices[0] == 0 and not ask_prices[0] == 0:
             self.fut_mid_price_hist.append((bid_prices[0]+ask_prices[0])/2)
         if len(self.fut_mid_price_hist) == HIST_LENGTH:
-            self.standard_deviation = pd.DataFrame.std(self.fut_mid_price_hist)
+            self.standard_deviation = np.std(self.fut_mid_price_hist)
         #self.logger.info("size{0}".format(len(self.fut_mid_price_hist)))
