@@ -37,10 +37,11 @@
   },
   "Traders": {
     "TraderOne": "secret",
-    "naive_autotrader": "secret",
+    "arbitrage_autotrader": "secret",
     "margin_lots_autotrader": "secret",
     "lots_autotrader": "secret",
     "margin_autotrader": "secret",
-    "competition_autotrader": "secret"
+    "competition_autotrader": "secret",
+    "activity_lots_autotrader": "secret"
   }
 }
