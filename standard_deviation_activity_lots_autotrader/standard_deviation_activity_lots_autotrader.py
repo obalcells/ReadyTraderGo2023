@@ -217,4 +217,6 @@ class AutoTrader(BaseAutoTrader):
             self.fut_mid_price_hist.pop(0)
         if not bid_prices[0] == 0 and not ask_prices[0] == 0:
             self.fut_mid_price_hist.append((bid_prices[0]+ask_prices[0])/2)
-        self.logger.info("size{0}".format(len(self.fut_mid_price_hist)))
+        if len(self.fut_mid_price_hist) == HIST_LENGTH:
+            self.standard_deviation = pd.DataFrame.std(self.fut_mid_price_hist)
+        #self.logger.info("size{0}".format(len(self.fut_mid_price_hist)))
