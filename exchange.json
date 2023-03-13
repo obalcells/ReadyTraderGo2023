@@ -1,6 +1,6 @@
 {
   "Engine": {
-    "MarketDataFile": "data/market_data1.csv",
+    "MarketDataFile": "data/market_data2.csv",
     "MarketEventInterval": 0.05,
     "MarketOpenDelay": 5.0,
     "MatchEventsFile": "match_events.csv",
@@ -37,6 +37,11 @@
   },
   "Traders": {
     "TraderOne": "secret",
-    "TraderTwo": "secret"
+    "arbitrage_autotrader": "secret",
+    "margin_lots_autotrader": "secret",
+    "lots_autotrader": "secret",
+    "margin_autotrader": "secret",
+    "competition_autotrader": "secret",
+    "activity_lots_autotrader": "secret"
   }
 }

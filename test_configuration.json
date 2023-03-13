@@ -1,0 +1,8 @@
+{
+    "LOT_SIZE": 10,
+    "HIST_LENGTH": 10,
+    "delta": 1,
+    "preferred_lots_low": 9,
+    "preferred_lots_high": 11,
+    "margin_adjustment": 0.0005
+  }

@@ -1,2 +1,7 @@
 data
 env
+*.log
+*.csv
+*.dat
+__pycache__/
+*.py[cod]
