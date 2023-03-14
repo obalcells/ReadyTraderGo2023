@@ -22,6 +22,8 @@ import subprocess
 import sys
 import time
 import traceback
+import os
+import shutil
 
 import ready_trader_go.exchange
 import ready_trader_go.trader
@@ -56,15 +58,38 @@ def on_error(name: str, error: Exception) -> None:
     print("%s threw an exception: %s" % (name, error), file=sys.stderr)
     traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
+def move_trader_files_to_home(args) -> bool:
+    for auto_trader in args.autotrader:
+        if auto_trader.suffix.lower == ".py" or not os.path.isdir(os.path.join("traders", auto_trader.with_suffix(""))):
+            folder_name = os.path.join("traders", auto_trader.with_suffix(""))
+            print("Trader folder '{0}' doesn't exist".format(folder_name))
+            print("Please create a folder for each trading strategy to run the trading simulation.")
+            return False
+        else:
+            shutil.copy(os.path.join("traders/", auto_trader.with_suffix(""), auto_trader.with_suffix(".py")), auto_trader.with_suffix(".py"))
+            # it's very important to NOT write auto_trader.with_suffix("") below here
+            # since sometimes we're gonna pass {trader_name}.{hash signature of parameters}
+            shutil.copy(os.path.join("traders/", auto_trader.with_suffix(""), auto_trader.name + ".json"), auto_trader.with_suffix(".json"))
+
+    return True
+    
+def erase_trader_files_from_home(args) -> None:
+    for auto_trader in args.autotrader:
+        assert os.path.isfile(auto_trader.with_suffix(".py")) and os.path.isfile(auto_trader.with_suffix(".json"))
+        os.remove(auto_trader.with_suffix(".py"))
+        os.remove(auto_trader.with_suffix(".json"))
 
 def run(args) -> None:
     """Run a match."""
+
+    if not move_trader_files_to_home(args):
+        # there was an error moving the files
+        # remember the names of the traders we pass have to be without suffix, so pass "activity_lots_trader" and NOT "activity_lots_trader.py"
+        return
+
     for auto_trader in args.autotrader:
-        if auto_trader.suffix.lower == ".py" and auto_trader.parent != pathlib.Path("."):
-            print("Python auto traders cannot be in a different directory: '%s'" % auto_trader, file=sys.stderr)
-            return
-        if not auto_trader.exists():
-            print("'%s' does not exist" % auto_trader, file=sys.stderr)
+        if not auto_trader.with_suffix(".py").exists():
+            print("'%s' does not exist" % auto_trader.with_suffix(".py"), file=sys.stderr)
             return
         if not auto_trader.with_suffix(".json").exists():
             print("'%s': configuration file is missing: %s" % (auto_trader, auto_trader.with_suffix(".json")))
@@ -77,7 +102,9 @@ def run(args) -> None:
         # Give the exchange simulator a chance to start up.
         time.sleep(0.5)
         
-        for path in args.autotrader:
+        for path_ in args.autotrader:
+            path = path_.with_suffix(".py")
+
             if path.suffix.lower() == ".py":
                 pool.apply_async(ready_trader_go.trader.main, (path.with_suffix("").name,),
                                  error_callback=lambda e: on_error("Auto-trader '%s'" % path, e))
@@ -91,6 +118,74 @@ def run(args) -> None:
             exchange.get()
         else:
             hud_main(args.host, args.port)
+
+    erase_trader_files_from_home(args)
+
+def test(args) -> None:
+    """Run a match and copy all log files to the strategy's folder that's being tested."""
+
+    if not move_trader_files_to_home(args):
+        # there was an error moving the files
+        return
+
+    for auto_trader in args.autotrader:
+        if not auto_trader.with_suffix(".py").exists():
+            print("'%s' does not exist" % auto_trader, file=sys.stderr)
+            return
+        if not auto_trader.with_suffix(".json").exists():
+            print("'%s': configuration file is missing: %s" % (auto_trader, auto_trader.with_suffix(".json")))
+            return
+
+    with multiprocessing.Pool(len(args.autotrader) + 2, maxtasksperchild=1) as pool:
+        exchange = pool.apply_async(ready_trader_go.exchange.main,
+                                    error_callback=lambda e: on_error("The exchange simulator", e))
+
+        # Give the exchange simulator a chance to start up.
+        time.sleep(0.5)
+        
+        for path_ in args.autotrader:
+            path = path_.with_suffix(".py")
+
+            if path.suffix.lower() == ".py":
+                pool.apply_async(ready_trader_go.trader.main, (path.with_suffix("").name,),
+                                 error_callback=lambda e: on_error("Auto-trader '%s'" % path, e))
+            else:
+                resolved: pathlib.Path = path.resolve()
+                pool.apply_async(subprocess.run, ([resolved],), {"check": True, "cwd": resolved.parent},
+                                 error_callback=lambda e: on_error("Auto-trader '%s'" % path, e))
+
+        # we don't display the HUD
+        exchange.get()
+
+    # We're gonna create a new directory to store these logs
+    # The log files for each simulation will be stored in a directory called
+    # `logs_{$log_number}` (within that trader's folder) where `log_number` is 1 for the first round, 2 for the second, etc
+    logs_path = pathlib.Path(os.path.join("traders", args.autotrader[0].with_suffix(""), "logs"))
+    if logs_path.exists():
+        files_and_dirs = os.listdir(logs_path)
+    else:
+        files_and_dirs = []
+
+    log_number = 1
+    for path in files_and_dirs:
+        if path.startswith("logs_"):
+            log_number += 1
+
+    output_dir = pathlib.Path(os.path.join("traders", args.autotrader[0].with_suffix(""), "logs", "logs" + "_" + str(log_number) + "_" + args.autotrader[0].name))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # move all log files to the path where the first autotrader algorithm (from the argument list) is located
+    # No need to store all the match events at the moment
+    # shutil.move("match_events.csv", os.path.join(output_dir, "match_events.csv"))
+    shutil.move("score_board.csv", os.path.join(output_dir, "score_board.csv"))
+    # shutil.move("exchange.log", os.path.join(output_dir, "exchange.log"))
+    shutil.copy(args.autotrader[0].with_suffix(".json"), os.path.join(output_dir, args.autotrader[0].with_suffix(".json")))
+
+    # No need to store the logs at the moment
+    # for auto_trader in args.autotrader:
+    #     shutil.move(auto_trader.with_suffix(".log"), os.path.join(output_dir, auto_trader.with_suffix(".log")))
+
+    erase_trader_files_from_home(args)
 
 
 def main() -> None:
@@ -110,6 +205,18 @@ def main() -> None:
     run_parser.add_argument("autotrader", nargs="*", type=pathlib.Path,
                             help="auto-traders to include in the match")
     run_parser.set_defaults(func=run)
+
+    test_parser = subparsers.add_parser("test",
+                                        description="Test a trading strategy against other algorithms or on its own.",
+                                        help="test a trading strategy against other algorithms or on its own.") 
+
+    test_parser.add_argument("--host", default="127.0.0.1",
+                            help="host name of the exchange simulator (default '127.0.0.1')")
+    test_parser.add_argument("--port", default=12347,
+                            help="port number of the exchange simulator (default 12347)")
+    test_parser.add_argument("autotrader", nargs="*", type=pathlib.Path,
+                            help="auto-traders to include in the match, the first one should be the folder of the strategy being tested")
+    test_parser.set_defaults(func=test)
 
     replay_parser = subparsers.add_parser("replay", aliases=["re"],
                                           description=("View a replay of a Ready Trader Go match from "

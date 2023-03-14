@@ -18,7 +18,7 @@
 import asyncio
 import logging
 
-from typing import List, Optional
+from typing import List, Any, Optional, Dict
 
 from .messages import (AMEND_MESSAGE, AMEND_MESSAGE_SIZE, CANCEL_MESSAGE, CANCEL_MESSAGE_SIZE,
                        ERROR_MESSAGE, ERROR_MESSAGE_SIZE, HEDGE_MESSAGE, HEDGE_MESSAGE_SIZE,
@@ -34,6 +34,7 @@ from .types import Lifespan, Side
 class BaseAutoTrader(Connection, Subscription):
     """Base class for an auto-trader."""
 
+    # auto_trader = mod.AutoTrader(app.event_loop, app.config["TeamName"], app.config["Secret"])
     def __init__(self, loop: asyncio.AbstractEventLoop, team_name: str, secret: str):
         """Initialise a new instance of the BaseTraderProtocol class."""
         Connection.__init__(self)
@@ -43,6 +44,18 @@ class BaseAutoTrader(Connection, Subscription):
         self.logger = logging.getLogger("TRADER")
         self.team_name: bytes = team_name.encode()
         self.secret: bytes = secret.encode()
+        self.parameters = {}
+
+    def __init__(self, loop: asyncio.AbstractEventLoop, config: Dict[str, Any]):
+        """Initialise a new instance of the BaseTraderProtocol class."""
+        Connection.__init__(self)
+        Subscription.__init__(self)
+
+        self.event_loop: asyncio.AbstractEventLoop = loop
+        self.logger = logging.getLogger("TRADER")
+        self.team_name: bytes = config["TeamName"].encode()
+        self.secret: bytes = config["Secret"].encode()
+        self.parameters: Dict = config["Parameters"]
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
         """Called twice, when the execution connection and the information channel are established."""

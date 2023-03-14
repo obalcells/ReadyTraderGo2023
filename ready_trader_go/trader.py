@@ -100,7 +100,7 @@ def main(name: str = "autotrader") -> None:
 
     sys.path.insert(0, os.getcwd())
     mod = importlib.import_module(name)
-    auto_trader = mod.AutoTrader(app.event_loop, app.config["TeamName"], app.config["Secret"])
+    auto_trader = mod.AutoTrader(app.event_loop, app.config)
 
     app.event_loop.create_task(__start_autotrader(auto_trader, app.config, app.event_loop))
     app.run()

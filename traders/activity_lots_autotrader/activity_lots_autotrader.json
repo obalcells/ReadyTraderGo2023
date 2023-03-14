@@ -1,0 +1,20 @@
+{
+  "Execution": {
+    "Host": "127.0.0.1",
+    "Port": 12345
+  },
+  "Information": {
+    "Type": "mmap",
+    "Name": "info.dat"
+  },
+  "TeamName": "activity_lots_autotrader",
+  "Secret": "secret",
+  "Parameters": {
+    "LOT_SIZE": 10,
+    "HIST_LENGTH": 10,
+    "delta": 1,
+    "preferred_lots_low": 9,
+    "preferred_lots_high": 11,
+    "margin_adjustment": 0.0005
+  }
+}
