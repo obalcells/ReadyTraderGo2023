@@ -22,13 +22,10 @@ import json
 from typing import List, Dict, Any
 from ready_trader_go import BaseAutoTrader, Instrument, Lifespan, MAXIMUM_ASK, MINIMUM_BID, Side
 
-LOT_SIZE = -1 
 POSITION_LIMIT = 100
 TICK_SIZE_IN_CENTS = 100
 MIN_BID_NEAREST_TICK = (MINIMUM_BID + TICK_SIZE_IN_CENTS) // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
 MAX_ASK_NEAREST_TICK = MAXIMUM_ASK // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
-HIST_LENGTH = -1 
-WEIGHTS = []
 
 class AutoTrader(BaseAutoTrader):
     """Example Auto-trader.
@@ -43,6 +40,10 @@ class AutoTrader(BaseAutoTrader):
     def __init__(self, loop: asyncio.AbstractEventLoop, config: Dict[str, Any]):
         """Initialise a new instance of the AutoTrader class."""
         super().__init__(loop, config)
+        self.lot_size = config["Parameters"]["LOT_SIZE"]
+        self.hist_length = config["Parameters"]["HIST_LENGTH"]
+        self.weights = [4*i*i*i/100 for i in range(1, self.hist_length+1)]
+
         self.order_ids = itertools.count(1)
         self.current_max_bid_hedge = 0
         self.current_min_ask_hedge = 0
@@ -54,12 +55,8 @@ class AutoTrader(BaseAutoTrader):
         self.margin = 0
         self.preferred_lots_low = config["Parameters"]["preferred_lots_low"]
         self.preferred_lots_high = config["Parameters"]["preferred_lots_high"]
-        self.lots_traded = LOT_SIZE
+        self.lots_traded = self.lot_size
         self.ask_id = self.ask_price = self.bid_id = self.bid_price = self.position = 0
-
-        LOT_SIZE = config["Parameters"]["LOT_SIZE"]
-        HIST_LENGTH = config["Parameters"]["HIST_LENGTH"]
-        WEIGHTS = [4*i*i*i/100 for i in range(1, HIST_LENGTH+1)]
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
@@ -102,7 +99,7 @@ class AutoTrader(BaseAutoTrader):
 
         if instrument == Instrument.ETF and self.current_max_bid_hedge != 0:
             #self.logger.info("received order book for ETF")
-            if len(self.fut_mid_price_hist) == HIST_LENGTH:
+            if len(self.fut_mid_price_hist) == self.hist_length:
                 self.margin = np.average(self.fut_mid_price_hist)*self.margin_adjustment #in % of self.fut_mid_price_hist
             price_adjustment = self.delta * TICK_SIZE_IN_CENTS # is this the smallest adjustment you can make?
             new_bid_price = bid_prices[0] + price_adjustment if bid_prices[0] != 0 else 0
@@ -128,8 +125,8 @@ class AutoTrader(BaseAutoTrader):
             #need to think about something more involved
             #this might be very bad, locks algorithm into trend
             available_lots = POSITION_LIMIT-self.position
-            if len(self.fut_mid_price_hist) == HIST_LENGTH:
-                lots_weight = np.average(self.fut_mid_price_hist, weights=WEIGHTS)-np.average(self.fut_mid_price_hist)
+            if len(self.fut_mid_price_hist) == self.hist_length:
+                lots_weight = np.average(self.fut_mid_price_hist, weights=self.weights)-np.average(self.fut_mid_price_hist)
                 if lots_weight > 0: #should by more
                     preferred_lots = 11
                 else:               #should by less
@@ -209,7 +206,7 @@ class AutoTrader(BaseAutoTrader):
         self.logger.info("received trade ticks for instrument %d with sequence number %d", instrument,
                          sequence_number)
         #might want to account for trading
-        if len(self.fut_mid_price_hist) == HIST_LENGTH and not bid_prices[0] == 0 and not ask_prices[0] == 0:
+        if len(self.fut_mid_price_hist) == self.hist_length and not bid_prices[0] == 0 and not ask_prices[0] == 0:
             self.fut_mid_price_hist.pop(0)
         if not bid_prices[0] == 0 and not ask_prices[0] == 0:
             self.fut_mid_price_hist.append((bid_prices[0]+ask_prices[0])/2)

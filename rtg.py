@@ -24,6 +24,7 @@ import time
 import traceback
 import os
 import shutil
+import pandas as pd
 
 import ready_trader_go.exchange
 import ready_trader_go.trader
@@ -174,16 +175,44 @@ def test(args) -> None:
     output_dir = pathlib.Path(os.path.join("traders", args.autotrader[0].with_suffix(""), "logs", "logs" + "_" + str(log_number) + "_" + args.autotrader[0].name))
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    outcomes = [] 
+    # Time,Team,Operation,BuyVolume,SellVolume,EtfPosition,FuturePosition,EtfPrice,FuturePrice,TotalFees,AccountBalance,ProfitOrLoss,Status
+    score_board = pd.read_csv("score_board.csv")
+    columns = score_board.columns
+    last_rows = score_board.tail(10)
+
+    for auto_trader in args.autotraders:
+        name = auto_trader.with_suffix("").name
+        team_outcome = {}
+        for _, row in last_rows.iterrows():
+            if row["TeamName"] == name:
+                team_outcome = row
+        outcomes.append(team_outcome) 
+
+    outcomes.sort(key=lambda stats: stats["ProfitOrLoss"])
+
     # move all log files to the path where the first autotrader algorithm (from the argument list) is located
     # No need to store all the match events at the moment
-    # shutil.move("match_events.csv", os.path.join(output_dir, "match_events.csv"))
+    shutil.move("match_events.csv", os.path.join(output_dir, "match_events.csv"))
     shutil.move("score_board.csv", os.path.join(output_dir, "score_board.csv"))
     # shutil.move("exchange.log", os.path.join(output_dir, "exchange.log"))
     shutil.copy(args.autotrader[0].with_suffix(".json"), os.path.join(output_dir, args.autotrader[0].with_suffix(".json")))
 
-    # No need to store the logs at the moment
+    if args.autotrader[0].suffix != "":
+        # we're running a benchmark of this autotrader with some
+        # custom parameter settings so we can safely delete the configuration file
+        custom_config_path = pathlib.Path(os.path.join("traders", args.autotrader[0].with_suffix(""), args.autotrader[0].name + ".json"))
+        assert custom_config_path.exists()
+        os.remove(custom_config_path)
+
+    # No need to store the logs of each trader at the moment
     # for auto_trader in args.autotrader:
     #     shutil.move(auto_trader.with_suffix(".log"), os.path.join(output_dir, auto_trader.with_suffix(".log")))
+    
+    # Append the results of the test to the tests.md file
+    with open(os.path.join("traders", "tests.md"), "a") as file:
+        file.write("\n\n")
+        file.write
 
     erase_trader_files_from_home(args)
 

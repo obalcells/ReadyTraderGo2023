@@ -5,9 +5,7 @@ FROM python:3.10
 WORKDIR pyready_trader_go
 
 COPY data data 
-COPY rtg.py rtg.py 
 COPY docker_requirements.txt docker_requirements.txt
-COPY exchange.json exchange.json
 
 RUN pip install -r docker_requirements.txt
 

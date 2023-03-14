@@ -21,6 +21,7 @@ import enum
 import logging
 import queue
 import threading
+import time
 
 from typing import Any, Callable, List, Optional, TextIO, Union
 
@@ -125,6 +126,7 @@ class MatchEventsWriter:
         self.match_events: MatchEvents = match_events
         self.queue: queue.Queue = queue.Queue()
         self.writer_task: Optional[threading.Thread] = None
+        self.on_writer_done_called: bool = False
 
         match_events.event_occurred.append(self.queue.put)
 
@@ -133,9 +135,16 @@ class MatchEventsWriter:
 
     def __del__(self):
         """Destroy an instance of the MatchEvents class."""
-        if not self.finished:
-            self.finish()
-        self.writer_task.join()
+        try:
+            if not self.finished:
+                self.finish()
+            time.sleep(0.1)
+            self.writer_task.join()
+        except Exception as e:
+            print("Exception happened when deleting the match events writer", e)
+            print("Writer task thread is alive? {0}".format(self.writer_task.is_alive()))
+            print("Has the function `on_writer_done` been called? {0}".format(self.on_writer_done_called))
+            raise e
 
     def finish(self) -> None:
         """Indicate the the series of events is complete."""
@@ -147,6 +156,7 @@ class MatchEventsWriter:
         """Called when the match event writer thread is done."""
         for c in self.task_complete:
             c(self)
+        self.on_writer_done_called = True
         self.logger.info("writer thread complete after processing %d match events", num_events)
 
     def start(self):

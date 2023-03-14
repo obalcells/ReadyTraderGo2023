@@ -8,5 +8,6 @@
     "Name": "info.dat"
   },
   "TeamName": "arbitrage_autotrader",
-  "Secret": "secret"
+  "Secret": "secret",
+  "Parameters": {}
 }

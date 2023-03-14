@@ -18,7 +18,7 @@
 import asyncio
 import itertools
 
-from typing import List
+from typing import List, Dict, Any
 
 from ready_trader_go import BaseAutoTrader, Instrument, Lifespan, MAXIMUM_ASK, MINIMUM_BID, Side
 
@@ -39,9 +39,9 @@ class AutoTrader(BaseAutoTrader):
     more lots than it has bought) then it increases its bid and ask prices.
     """
 
-    def __init__(self, loop: asyncio.AbstractEventLoop, team_name: str, secret: str):
+    def __init__(self, loop: asyncio.AbstractEventLoop, config: Dict[str, Any]):
         """Initialise a new instance of the AutoTrader class."""
-        super().__init__(loop, team_name, secret)
+        super().__init__(loop, config)
         self.order_ids = itertools.count(1)
         self.current_max_bid_hedge = 0
         self.current_min_ask_hedge = 0
