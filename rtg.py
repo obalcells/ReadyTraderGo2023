@@ -209,11 +209,6 @@ def test(args) -> None:
     # for auto_trader in args.autotrader:
     #     shutil.move(auto_trader.with_suffix(".log"), os.path.join(output_dir, auto_trader.with_suffix(".log")))
     
-    # Append the results of the test to the tests.md file
-    with open(os.path.join("traders", "tests.md"), "a") as file:
-        file.write("\n\n")
-        file.write
-
     erase_trader_files_from_home(args)
 
 
