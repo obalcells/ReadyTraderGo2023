@@ -25,9 +25,11 @@ import traceback
 import os
 import shutil
 import pandas as pd
+import json
 
 import ready_trader_go.exchange
 import ready_trader_go.trader
+from ready_trader_go.modified_event_source import ModifiedRecordedEventSource
 
 try:
     from ready_trader_go.hud.__main__ import main as hud_main, replay as hud_replay
@@ -87,6 +89,11 @@ def run(args) -> None:
         # there was an error moving the files
         # remember the names of the traders we pass have to be without suffix, so pass "activity_lots_trader" and NOT "activity_lots_trader.py"
         return
+
+    # take the exchange settings from the first autotrader
+    with open(os.path.join("traders", args.autotrader[0].with_suffix(""), args.autotrader[0].name + ".json"), "r") as file:
+        exchange_settings = json.load(file)["Exchange"]
+        json.dump(exchange_settings, open("exchange.json", "w"))
 
     for auto_trader in args.autotrader:
         if not auto_trader.with_suffix(".py").exists():
@@ -175,22 +182,6 @@ def test(args) -> None:
     output_dir = pathlib.Path(os.path.join("traders", args.autotrader[0].with_suffix(""), "logs", "logs" + "_" + str(log_number) + "_" + args.autotrader[0].name))
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    outcomes = [] 
-    # Time,Team,Operation,BuyVolume,SellVolume,EtfPosition,FuturePosition,EtfPrice,FuturePrice,TotalFees,AccountBalance,ProfitOrLoss,Status
-    score_board = pd.read_csv("score_board.csv")
-    columns = score_board.columns
-    last_rows = score_board.tail(10)
-
-    for auto_trader in args.autotraders:
-        name = auto_trader.with_suffix("").name
-        team_outcome = {}
-        for _, row in last_rows.iterrows():
-            if row["TeamName"] == name:
-                team_outcome = row
-        outcomes.append(team_outcome) 
-
-    outcomes.sort(key=lambda stats: stats["ProfitOrLoss"])
-
     # move all log files to the path where the first autotrader algorithm (from the argument list) is located
     # No need to store all the match events at the moment
     shutil.move("match_events.csv", os.path.join(output_dir, "match_events.csv"))
@@ -205,12 +196,16 @@ def test(args) -> None:
         assert custom_config_path.exists()
         os.remove(custom_config_path)
 
-    # No need to store the logs of each trader at the moment
-    # for auto_trader in args.autotrader:
-    #     shutil.move(auto_trader.with_suffix(".log"), os.path.join(output_dir, auto_trader.with_suffix(".log")))
+    # No need to store the logs of each trader at the moment only the main one
+    shutil.move(args.autotrader[0].with_suffix(".log"), os.path.join(output_dir, auto_trader.with_suffix(".log")))
     
     erase_trader_files_from_home(args)
 
+def debug_competitor(args) -> None:
+    tick_size = 1.00
+    etf_clamp = 0.002
+    with args.filename.open("r", newline="") as csv_file:
+        ModifiedRecordedEventSource.from_csv(csv_file, etf_clamp, tick_size)
 
 def main() -> None:
     """Process command line arguments and execute the given command."""
@@ -250,6 +245,12 @@ def main() -> None:
                                help="name of the match events file to replay (default 'match_events.csv')",
                                type=pathlib.Path)
     replay_parser.set_defaults(func=replay)
+
+    debug_parser = subparsers.add_parser("debug")
+
+    debug_parser.add_argument("filename", nargs="?", default=pathlib.Path("match_events.csv"), help="csv file of the match", type=pathlib.Path)
+
+    debug_parser.set_defaults(func=debug_competitor)
 
     args = parser.parse_args()
     args.func(args)
