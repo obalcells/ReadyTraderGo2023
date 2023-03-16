@@ -77,6 +77,7 @@ class AutoTrader(BaseAutoTrader):
         self.fut_ask_volumes = []
         self.fut_bid_prices = []
         self.fut_bid_volumes = [] 
+        self.amount_trades_on_order_book = 0
 
         # parameters to tweak
         self.min_profitability = 0.002
@@ -84,7 +85,6 @@ class AutoTrader(BaseAutoTrader):
         self.order_size_ratio = 0.5
         self.adjust_order_enabled = True
         self.drift_delay = 3
-        self.amount_trades_on_order_book = 0 # (etf oderbook sequence number, number of orders since last book update)
         self.max_trades_on_order_book = 5 #maximum number of orders between two book updates
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:

@@ -4,6 +4,7 @@
     "order_size_ration": [0.2, 0.5, 0.8, 1],
     "adjust_order_enabled": [1],
     "drift_delay": [0, 2, 5],
-    "MarketDataFile": ["data/marekt_data1.csv", "data/marekt_data2.csv","data/marekt_data3.csv", "data/marekt_data4.csv"]    
+    "max_traders_on_order_book": [0,1,3,5,7],
+    "MarketDataFile": ["data/marekt_data1.csv", "data/marekt_data2.csv","data/marekt_data3.csv", "data/marekt_data4.csv"]
 }
   
