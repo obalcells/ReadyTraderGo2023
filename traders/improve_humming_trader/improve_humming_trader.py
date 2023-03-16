@@ -78,14 +78,19 @@ class AutoTrader(BaseAutoTrader):
         self.fut_bid_prices = []
         self.fut_bid_volumes = [] 
         self.amount_trades_on_order_book = 0
+        self.avg_fut_mid_price = (0,0) # (current avg, number of samples)
+        self.volatility_timer = 0
+        self.volatility_pct = 0
 
         # parameters to tweak
-        self.min_profitability = 0.002
+        self.min_profitability = 0.0015
         self.cancellation_penalty = 0.01
         self.order_size_ratio = 0.5
         self.adjust_order_enabled = True
         self.drift_delay = 3
-        self.max_trades_on_order_book = 5 #maximum number of orders between two book updates
+        self.max_trades_on_order_book = 5 # maximum number of orders between two book updates
+        self.volatility_adjustment_mult = 3 # should be between 2 and 4
+        self.volatility_buffer_size = 3
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
@@ -142,6 +147,7 @@ class AutoTrader(BaseAutoTrader):
         self.logger.info("Balance is {0} ETF and {1} FUT".format(self.etf_position, self.fut_position))
 
         if instrument == Instrument.ETF:
+            self.volatility_rate(sequence_number, ask_prices,bid_prices)
             self.update_etf_order_book_data(sequence_number, ask_prices, ask_volumes, bid_prices, bid_volumes)
         else:
             self.update_fut_order_book_data(sequence_number, ask_prices, ask_volumes, bid_prices, bid_volumes)
@@ -378,7 +384,7 @@ class AutoTrader(BaseAutoTrader):
 
         # TODO: Get the effective price based on the order size, although it won't change much probably
         taker_price = math.floor(self.calculate_effective_price(bid_size, self.fut_ask_prices, self.fut_bid_prices))
-        maker_price = taker_price / (1 + self.min_profitability)
+        maker_price = taker_price / (1 + self.min_profitability + self.volatility_pct)
 
         if self.adjust_order_enabled:
             maker_price = min(maker_price, price_above_best_bid)
@@ -397,7 +403,7 @@ class AutoTrader(BaseAutoTrader):
         price_below_best_ask = (best_ask_price - TICK_SIZE_IN_CENTS) // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
 
         taker_price = math.ceil(self.calculate_effective_price(self.bid_size, self.fut_ask_prices, self.fut_ask_volumes))
-        maker_price = taker_price * (1 + self.min_profitability) 
+        maker_price = taker_price * (1 + self.min_profitability + self.volatility_pct) 
 
         if self.adjust_order_enabled:
             maker_price = max(maker_price, price_below_best_ask)
@@ -451,3 +457,21 @@ class AutoTrader(BaseAutoTrader):
 
         #TODO: might want to check whether it makes more sense the other way around, will probably lead to more orders being made
         return price / needed_volume
+    
+    def volatility_rate(self, sequence_number: int, ask_prices: List[int], bid_prices: List[int]) -> None:
+        # only called on Future order book update 
+        
+            current_fut_mid_price = (((ask_prices[0] + bid_prices[0]) / 2) // TICK_SIZE_IN_CENTS) * TICK_SIZE_IN_CENTS
+            self.avg_fut_mid_price[0] = (self.avg_fut_mid_price[0] * self.avg_fut_mid_price[1] - current_fut_mid_price)/(self.avg_fut_mid_price[1] + 1)
+            self.avg_fut_mid_price[1] = self.avg_fut_mid_price[1] + 1
+
+            # 3 sigma volatility adjustment
+            vol_abs = ((self.avg_fut_mid_price[0] / float(current_fut_mid_price)) * self.volatility_adjustment_mult) # standard div with some adjustment
+
+            if (self.volatility_timer + self.volatility_buffer_size > sequence_number) or (TICK_SIZE_IN_CENTS * round(vol_abs / TICK_SIZE_IN_CENTS)) >= self.volatility_pct:
+                self.volatility_pct = (TICK_SIZE_IN_CENTS * round(vol_abs / TICK_SIZE_IN_CENTS))
+                self.volatility_timer = sequence_number
+
+            
+            
+            
