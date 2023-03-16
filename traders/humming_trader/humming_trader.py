@@ -295,7 +295,7 @@ class AutoTrader(BaseAutoTrader):
             # outstanding bid is still profitable
             # but has the price drifted so much that the order no longer makes sense?
             else:
-                if self.etf_order_book_sequence_number > self.bid_sequence_number + self.drift_delay and self.bid_price != new_bid_price:
+                if self.etf_order_book_sequence_number >= self.bid_sequence_number + self.drift_delay and self.bid_price != new_bid_price:
                     self.send_cancel_order(self.bid_id)
 
         # see if we should place a new bid given that we don't have any outstanding one
@@ -324,7 +324,7 @@ class AutoTrader(BaseAutoTrader):
                 self.send_cancel_order(self.ask_id)
 
             else:
-                if self.etf_order_book_sequence_number > self.ask_sequence_number + self.drift_delay and self.ask_price != self.ask_id:
+                if self.etf_order_book_sequence_number >= self.ask_sequence_number + self.drift_delay and self.ask_price != new_ask_price:
                     self.send_cancel_order(self.ask_id)
 
         elif new_ask_size > 0 and new_ask_price > 0:

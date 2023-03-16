@@ -11,10 +11,11 @@ import shutil
 import pathlib
 import openpyxl
 import pandas as pd
+from typing import Dict
 
-TESTING_COMPETITORS = ["arbitrage_autotrader", "optiver_trader"]
-MAX_NUMBER_PARAMETER_COMBINATIONS = 20 
-MAX_CONCURRENT_SIMULATIONS = 10 
+TESTING_COMPETITORS = []
+MAX_NUMBER_PARAMETER_COMBINATIONS = 1 
+MAX_CONCURRENT_SIMULATIONS = 1
 
 default_exchange_settings = {
   "Engine": {
@@ -23,7 +24,7 @@ default_exchange_settings = {
     "MarketOpenDelay": 5.0,
     "MatchEventsFile": "match_events.csv",
     "ScoreBoardFile": "score_board.csv",
-    "Speed": 5.0,
+    "Speed": 100.0,
     "TickInterval": 0.25
   },
   "Execution": {
@@ -54,7 +55,6 @@ default_exchange_settings = {
     "PositionLimit": 100
   },
   "Traders": {
-    "kirby": "not_a_secret"
   }
 }
 
@@ -225,11 +225,7 @@ def get_mounts():
                                   source=user_working_dir+"/rtg.py",
                                   type="bind")
 
-    exchange_file = docker.types.Mount(target="/pyready_trader_go/exchange.json",
-                                  source=user_working_dir+"/exchange.json",
-                                  type="bind")
-
-    mounts = [ready_trader_go_code, trading_strategies, rtg_file, exchange_file]
+    mounts = [ready_trader_go_code, trading_strategies, rtg_file]
 
     return mounts 
 
@@ -237,8 +233,12 @@ def run_benchmark(trader_name):
     config_file = os.path.join("traders", trader_name, trader_name + ".json")
     parameters_file = os.path.join("traders", trader_name, "testing_parameters.json") 
 
-    default_exchange_settings["Traders"] = TESTING_COMPETITORS 
-    default_exchange_settings["Traders"].append(trader_name)
+    default_exchange_settings["Traders"] = dict() 
+
+    for trader in TESTING_COMPETITORS:
+        default_exchange_settings["Traders"][trader] = "secret"
+
+    default_exchange_settings["Traders"][trader_name] = "secret"
 
     if trader_name is None or len(trader_name) == 0 or not os.path.exists(config_file):
         print("Trader doesn't exist!")
@@ -264,7 +264,7 @@ def run_benchmark(trader_name):
     while not testing_done:
         next_batch_of_containers = []
         
-        while not testing_done and len(next_batch_of_containers) < MAX_CONCURRENT_SIMULATIONS:
+        while not testing_done and len(next_batch_of_containers) < MAX_CONCURRENT_SIMULATIONS and len(tried_combinations) < MAX_NUMBER_PARAMETER_COMBINATIONS:
             parameters = next(generator)
 
             if parameters == None:

@@ -9,4 +9,4 @@ COPY docker_requirements.txt docker_requirements.txt
 
 RUN pip install -r docker_requirements.txt
 
-ENTRYPOINT [ "python3", "rtg.py", "test" ]
+CMD [ "python3", "rtg.py", "test", "humming_trader"]
