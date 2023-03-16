@@ -36,7 +36,7 @@ from ready_trader_go.types import Instrument, Lifespan, Side
 __all__ = ("EventSource", "LiveEventSource", "RecordedEventSource")
 
 
-TICK_INTERVAL_MILLISECONDS = 1 
+TICK_INTERVAL_MILLISECONDS = 500 
 TICK_INTERVAL_SECONDS = TICK_INTERVAL_MILLISECONDS / 1000.0
 
 
@@ -284,17 +284,17 @@ class RecordedEventSource(EventSource):
         """Callback when the timer ticks."""
         now = self.__now = self.__now + TICK_INTERVAL_SECONDS
 
-        target_team = "Shedneryan_223251"
-        target_team_found = False
+        # target_team = "Shedneryan_223251"
+        # target_team_found = False
 
         if self.__next_event.when <= now:
-            if self.__next_event.args[0] == target_team:
-                target_team_found = True
+            # if self.__next_event.args[0] == target_team:
+            #     target_team_found = True
             self.__next_event.emitter(*self.__next_event.args)
             event: Optional[Event] = None
             for event in self.__event_iter:
-                if event.args[0] == target_team:
-                    target_team_found = True
+                # if event.args[0] == target_team:
+                #     target_team_found = True
                 if event.when > now:
                     break
                 event.emitter(*event.args)
@@ -310,9 +310,9 @@ class RecordedEventSource(EventSource):
         if self.__now >= self.__end_time:
             self._timer.stop()
             self.match_over.emit()
-        else:
-            if target_team_found == False and self.__next_event.args[0] != target_team:
-                self._on_timer_tick()
+        # else:
+        #     if target_team_found == False and self.__next_event.args[0] != target_team:
+        #         self._on_timer_tick()
 
     @staticmethod
     def from_csv(file_object: TextIO, etf_clamp: float, tick_size: float,
@@ -405,7 +405,7 @@ class RecordedEventSource(EventSource):
     def start(self) -> None:
         """Start this recorded event source."""
         self.__now = 0.0
-        self._timer.start(1000)
+        self._timer.start(TICK_INTERVAL_MILLISECONDS)
         self.__event_iter = iter(self.__events)
         self.__next_event = next(self.__event_iter, None)
         for competitor in sorted(self.__teams):
