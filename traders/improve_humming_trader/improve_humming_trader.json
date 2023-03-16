@@ -8,6 +8,6 @@
     "Name": "info.dat"
   },
   "TeamName": "improve_humming_trader",
-  "Secret": "not_a_secret",
+  "Secret": "secret",
   "Parameters": {}
 }
