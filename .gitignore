@@ -5,4 +5,4 @@ env
 *.dat
 __pycache__/
 *.py[cod]
-.DS_STORE
+.DS_Store

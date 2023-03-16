@@ -29,7 +29,7 @@ import json
 
 import ready_trader_go.exchange
 import ready_trader_go.trader
-from ready_trader_go.modified_event_source import ModifiedRecordedEventSource
+# from ready_trader_go.modified_event_source import ModifiedRecordedEventSource
 
 try:
     from ready_trader_go.hud.__main__ import main as hud_main, replay as hud_replay
@@ -90,11 +90,6 @@ def run(args) -> None:
         # remember the names of the traders we pass have to be without suffix, so pass "activity_lots_trader" and NOT "activity_lots_trader.py"
         return
 
-    # take the exchange settings from the first autotrader
-    with open(os.path.join("traders", args.autotrader[0].with_suffix(""), args.autotrader[0].name + ".json"), "r") as file:
-        exchange_settings = json.load(file)["Exchange"]
-        json.dump(exchange_settings, open("exchange.json", "w"))
-
     for auto_trader in args.autotrader:
         if not auto_trader.with_suffix(".py").exists():
             print("'%s' does not exist" % auto_trader.with_suffix(".py"), file=sys.stderr)
@@ -135,6 +130,10 @@ def test(args) -> None:
     if not move_trader_files_to_home(args):
         # there was an error moving the files
         return
+
+    # take the exchange settings from the first autotrader
+    exchange_settings = json.load(open(os.path.join("traders", args.autotrader[0].with_suffix(""), args.autotrader[0].name + ".json"), "r"))["Exchange"]
+    json.dump(exchange_settings, open("exchange.json", "w"), indent=4)
 
     for auto_trader in args.autotrader:
         if not auto_trader.with_suffix(".py").exists():
@@ -204,8 +203,9 @@ def test(args) -> None:
 def debug_competitor(args) -> None:
     tick_size = 1.00
     etf_clamp = 0.002
-    with args.filename.open("r", newline="") as csv_file:
-        ModifiedRecordedEventSource.from_csv(csv_file, etf_clamp, tick_size)
+    # do nothing
+    # with args.filename.open("r", newline="") as csv_file:
+    #     ModifiedRecordedEventSource.from_csv(csv_file, etf_clamp, tick_size)
 
 def main() -> None:
     """Process command line arguments and execute the given command."""

@@ -8,6 +8,8 @@
     "Name": "info.dat"
   },
   "TeamName": "humming_trader",
-  "Secret": "not_a_secret",
+  "Secret": "secret",
+  "Exchange": {},
+  "Market_File_For_Benchmark": "market_data2.csv",
   "Parameters": {}
 }
