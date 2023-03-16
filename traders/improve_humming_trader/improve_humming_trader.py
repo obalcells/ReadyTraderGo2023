@@ -147,7 +147,7 @@ class AutoTrader(BaseAutoTrader):
         self.logger.info("Balance is {0} ETF and {1} FUT".format(self.etf_position, self.fut_position))
 
         if instrument == Instrument.ETF:
-            # self.volatility_rate(sequence_number, ask_prices,bid_prices)
+            self.volatility_rate(sequence_number, ask_prices,bid_prices)
             self.update_etf_order_book_data(sequence_number, ask_prices, ask_volumes, bid_prices, bid_volumes)
         else:
             self.update_fut_order_book_data(sequence_number, ask_prices, ask_volumes, bid_prices, bid_volumes)
@@ -384,7 +384,7 @@ class AutoTrader(BaseAutoTrader):
 
         # TODO: Get the effective price based on the order size, although it won't change much probably
         taker_price = math.floor(self.calculate_effective_price(bid_size, self.fut_ask_prices, self.fut_bid_prices))
-        maker_price = taker_price / (1 + self.min_profitability) # + self.volatility_pct)
+        maker_price = taker_price / (1 + self.min_profitability + self.volatility_pct)
 
         if self.adjust_order_enabled:
             maker_price = min(maker_price, price_above_best_bid)
@@ -403,7 +403,7 @@ class AutoTrader(BaseAutoTrader):
         price_below_best_ask = (best_ask_price - TICK_SIZE_IN_CENTS) // TICK_SIZE_IN_CENTS * TICK_SIZE_IN_CENTS
 
         taker_price = math.ceil(self.calculate_effective_price(self.bid_size, self.fut_ask_prices, self.fut_ask_volumes))
-        maker_price = taker_price * (1 + self.min_profitability) #  + self.volatility_pct) 
+        maker_price = taker_price * (1 + self.min_profitability  + self.volatility_pct) 
 
         if self.adjust_order_enabled:
             maker_price = max(maker_price, price_below_best_ask)
@@ -463,15 +463,15 @@ class AutoTrader(BaseAutoTrader):
             if ask_prices[0] == 0 or bid_prices[0] == 0:
                 return
 
-            current_fut_mid_price = (((ask_prices[0] + bid_prices[0]) / 2) // TICK_SIZE_IN_CENTS) * TICK_SIZE_IN_CENTS
-            self.avg_fut_mid_price[0] = (self.avg_fut_mid_price[0] * self.avg_fut_mid_price[1] - current_fut_mid_price)/(self.avg_fut_mid_price[1] + 1)
+            current_fut_mid_price = (ask_prices[0] + bid_prices[0]) / 2
+            self.avg_fut_mid_price[0] = ((ask_prices[0] + bid_prices[0])/2 + self.avg_fut_mid_price[0] * self.avg_fut_mid_price[1]) / (self.avg_fut_mid_price[1] + 1)
             self.avg_fut_mid_price[1] = self.avg_fut_mid_price[1] + 1
 
             # 3 sigma volatility adjustment
             vol_abs = ((float(self.avg_fut_mid_price[0]) / float(current_fut_mid_price)) * self.volatility_adjustment_mult) # standard div with some adjustment
 
-            if (self.volatility_timer + self.volatility_buffer_size > sequence_number) or (TICK_SIZE_IN_CENTS * round(vol_abs / TICK_SIZE_IN_CENTS)) >= self.volatility_pct:
-                self.volatility_pct = (TICK_SIZE_IN_CENTS * round(vol_abs / TICK_SIZE_IN_CENTS))
+            if (self.volatility_timer + self.volatility_buffer_size > sequence_number) or vol_abs >= self.volatility_pct:
+                self.volatility_pct = vol_abs / self.avg_fut_mid_price[0]
                 self.volatility_timer = sequence_number
                 self.logger.warn("vol adj: {0}".format(self.volatility_pct))
 
