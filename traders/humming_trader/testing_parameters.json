@@ -1,9 +1,9 @@
 {
-    "min_profitability": [0.0, 0.001, 0.002, 0.005],
-    "cancellation_penalty": [0.0, 0.005, 0.01, 0.025],
-    "order_size_ration": [0.2, 0.5, 0.8, 1],
-    "adjust_order_enabled": [1],
-    "drift_delay": [0, 2, 5],
-    "MarketDataFile": ["data/marekt_data1.csv", "data/marekt_data2.csv","data/marekt_data3.csv", "data/marekt_data4.csv"]    
+    "min_profitability": [0.001, 0.01],
+    "cancellation_penalty": [0.0, 0.01, 0.025],
+    "order_size_ratio": [0.2, 0.5],
+    "adjust_order_enabled": [0, 1],
+    "drift_delay": [0, 5],
+    "MarketDataFile": ["data/market_data1.csv"]    
 }
   

@@ -79,11 +79,11 @@ class AutoTrader(BaseAutoTrader):
         self.fut_bid_volumes = [] 
 
         # parameters to tweak
-        self.min_profitability = 0.002
-        self.cancellation_penalty = 0.01
-        self.order_size_ratio = 0.5
-        self.adjust_order_enabled = True
-        self.drift_delay = 3 
+        self.min_profitability = config["Parameters"]["min_profitability"] 
+        self.cancellation_penalty = config["Parameters"]["cancellation_penalty"] 
+        self.order_size_ratio = config["Parameters"]["order_size_ratio"] 
+        self.adjust_order_enabled = config["Parameters"]["adjust_order_enabled"] 
+        self.drift_delay = config["Parameters"]["drift_delay"] 
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.

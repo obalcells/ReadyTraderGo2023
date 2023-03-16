@@ -13,9 +13,9 @@ import openpyxl
 import pandas as pd
 from typing import Dict
 
-TESTING_COMPETITORS = []
-MAX_NUMBER_PARAMETER_COMBINATIONS = 1 
-MAX_CONCURRENT_SIMULATIONS = 1
+TESTING_COMPETITORS = ["optiver_trader", "kirby"]
+MAX_NUMBER_PARAMETER_COMBINATIONS = 20 
+MAX_CONCURRENT_SIMULATIONS = 5 
 
 default_exchange_settings = {
   "Engine": {
@@ -24,7 +24,7 @@ default_exchange_settings = {
     "MarketOpenDelay": 5.0,
     "MatchEventsFile": "match_events.csv",
     "ScoreBoardFile": "score_board.csv",
-    "Speed": 100.0,
+    "Speed": 2.0,
     "TickInterval": 0.25
   },
   "Execution": {
@@ -89,9 +89,7 @@ def get_next_parameter_combination(parameters_file : str):
     yield None
 
 def read_market_file_from_trader_parameters(file):
-    return "market_data1.csv"
-    # trader_settings = json.load(file)
-    # return trader_settings["Market_File_For_Benchmark"]
+    return json.load(open(file, "r"))["Parameters"]["MarketDataFile"]
 
 def create_report(score_board_files, main_trader, parameters_for_each_match):
     open("benchmark_report.xlsx", "w").close()
@@ -150,9 +148,9 @@ def create_report(score_board_files, main_trader, parameters_for_each_match):
 
     for i in range(len(score_board_files)):
         score_board = pd.read_csv(score_board_files[i])
-        print(score_board.head())
+        print("Storing match #{0} information:".format(i+1))
+        print(score_board.tail())
         traders = list(score_board["Team"].unique()) 
-        print("# of traders is", len(traders))
         match_outcome = []
         for trader in traders:
             trader_outcome = score_board[score_board["Team"] == trader].iloc[-1]
@@ -234,10 +232,8 @@ def run_benchmark(trader_name):
     parameters_file = os.path.join("traders", trader_name, "testing_parameters.json") 
 
     default_exchange_settings["Traders"] = dict() 
-
     for trader in TESTING_COMPETITORS:
         default_exchange_settings["Traders"][trader] = "secret"
-
     default_exchange_settings["Traders"][trader_name] = "secret"
 
     if trader_name is None or len(trader_name) == 0 or not os.path.exists(config_file):
@@ -246,7 +242,6 @@ def run_benchmark(trader_name):
         exit(1)
 
     prev_log_folders = os.listdir(os.path.join("traders", trader_name, "logs"))
-    print("Prev amount of log folders", len(prev_log_folders))
 
     trader_config = json.load(open(config_file, "r"))
 
@@ -264,7 +259,11 @@ def run_benchmark(trader_name):
     while not testing_done:
         next_batch_of_containers = []
         
-        while not testing_done and len(next_batch_of_containers) < MAX_CONCURRENT_SIMULATIONS and len(tried_combinations) < MAX_NUMBER_PARAMETER_COMBINATIONS:
+        while not testing_done and len(next_batch_of_containers) < MAX_CONCURRENT_SIMULATIONS:
+            if len(tried_combinations) >= MAX_NUMBER_PARAMETER_COMBINATIONS:
+                testing_done = True
+                continue
+
             parameters = next(generator)
 
             if parameters == None:
@@ -273,6 +272,7 @@ def run_benchmark(trader_name):
             else:
                 trader_config["Parameters"] = parameters
                 trader_config["Exchange"] = default_exchange_settings
+                trader_config["Exchange"]["MarketDataFile"] = parameters["MarketDataFile"] 
 
                 hex_code = hashlib.sha256((trader_code_hash + str(parameters)).encode()).hexdigest()[:6]
 
@@ -302,7 +302,6 @@ def run_benchmark(trader_name):
             testing_done = True
 
     folders_now = os.listdir(os.path.join("traders", trader_name, "logs"))
-    print("Log folders now", len(folders_now))
     simulation_scores = []
     parameters_for_each_match = []
 

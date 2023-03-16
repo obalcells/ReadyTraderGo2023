@@ -196,7 +196,8 @@ def test(args) -> None:
         os.remove(custom_config_path)
 
     # No need to store the logs of each trader at the moment only the main one
-    shutil.move(args.autotrader[0].with_suffix(".log"), os.path.join(output_dir, auto_trader.with_suffix(".log")))
+    for trader in args.autotrader:
+        shutil.move(trader.with_suffix(".log"), os.path.join(output_dir, trader.with_suffix(".log")))
     
     erase_trader_files_from_home(args)
 

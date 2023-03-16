@@ -69,11 +69,13 @@ class AutoTrader(BaseAutoTrader):
         self.hedge_bid_price = self.hedge_bid_size = self.hedge_bid_id = 0
         self.hedge_ask_price = self.hedge_ask_size = self.hedge_ask_id = 0
         self.last_hedged_sequence_number = 0
+        self.first_hedged_sequence_number = -1
 
         self.etf_position = 0
         self.fut_position = 0
         self.profit = 0
         self.fees = 0
+        self.true_price = 0
 
         self.etf_order_book_sequence_number = -2 
         self.fut_order_book_sequence_number = -1 
@@ -89,17 +91,14 @@ class AutoTrader(BaseAutoTrader):
         self.last_etf_traded_prices = []
 
         # parameters to tweak
-        self.min_profitability = 0.002
-        self.cancellation_penalty = 0.01
-        self.order_size_ratio = 0.5
         self.adjust_order_enabled = True
         self.drift_delay = 3 
-        # self.true_price_calculation = "MID_PRICE" # other option is "RUNNING_AVERAGE_TRADE_PRICE"
-        self.true_price_calculation = "RUNNING_AVERAGE_TRADE_PRICE"
-        # we can delay the hedging by 500 sequence numbers
-        self.sequence_number_heding_delay = 500 
-        self.depth_long = 30
-        self.depth_short = 5
+        self.true_price_calculation = "MID_PRICE" # other option is "RUNNING_AVERAGE_TRADE_PRICE"
+        self.sequence_number_heding_delay = 600 
+        self.sequence_numbers_to_be_sure_we_are_hedged = 2
+        self.depth_long = 30 
+        self.depth_short = 5 
+        self.cancelling_delay = 0 
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
         """Called when the exchange detects an error.
@@ -123,6 +122,22 @@ class AutoTrader(BaseAutoTrader):
         self.logger.info("received hedge filled for order %d with average price %d and volume %d", client_order_id,
                          price, volume)
 
+        # if volume = 0 the order wasn't filled
+        if client_order_id == self.hedge_bid_id:
+            self.fut_position += volume
+
+            # even if we haven't filled the order we just delete it 
+            self.hedge_bid_id = 0
+            self.hedge_bid_size = 0
+            self.hedge_bid_price = 0
+
+        elif client_order_id == self.hedge_ask_id:
+            self.fut_position -= volume
+
+            self.hedge_ask_id = 0
+            self.hedge_ask_size = 0
+            self.hedge_ask_price = 0
+
 
     def on_order_book_update_message(self, instrument: int, sequence_number: int, ask_prices: List[int],
                                      ask_volumes: List[int], bid_prices: List[int], bid_volumes: List[int]) -> None:
@@ -133,8 +148,8 @@ class AutoTrader(BaseAutoTrader):
         prices are reported along with the volume available at each of those
         price levels.
         """
-        self.logger.info("received order book for instrument %d with sequence number %d", instrument,
-                         sequence_number)
+        # self.logger.info("received order book for instrument %d with sequence number %d", instrument,
+        #                  sequence_number)
 
         self.logger.info("Balance is {0} ETF and {1} FUT".format(self.etf_position, self.fut_position))
 
@@ -146,14 +161,24 @@ class AutoTrader(BaseAutoTrader):
         if abs(self.etf_position - self.fut_position) <= 10:
             self.last_hedged_sequence_number = sequence_number
 
+        # we might need to add this again if we get kicked out for not hedging
+        # if abs(self.etf_position - self.fut_position) <= 10 and self.first_hedged_sequence_number == -1:
+        #     self.first_hedged_sequence_number = sequence_number
+        # elif abs(self.etf_position - self.fut_position) <= 10 and self.first_hedged_sequence_number + self.sequence_numbers_to_be_sure_we_are_hedged <= sequence_number:
+        #     self.last_hedged_sequence_number = sequence_number
+        #     self.first_hedged_sequence_number = -1
+
         self.check_conditions()
 
         if self.bid_size == 0 and self.ask_size == 0 and self.etf_position == 0:
             self.initialize_bid_and_ask()
         else:
-            self.refresh_bid_and_ask_quotes()
+            self.update_bid()
+            self.update_ask()
 
-    # refresh our bid/ask prices if they're outdated
+        self.check_conditions()
+
+    # refresh our bid/ask prices if we don't have any outstanding one 
     def refresh_bid_and_ask_quotes(self) -> None:
         # if we don't have order book information or it's not synchronized we don't
         # want to touch our bid/ask prices
@@ -231,7 +256,7 @@ class AutoTrader(BaseAutoTrader):
         if client_order_id == self.bid_id:
             self.logger.info("Filled ETF | BUY | seq number {0} | order number {1} | fill_volume {2} | remaining_volume {3}".format(self.bid_sequence_number, self.bid_id, fill_volume, remaining_volume))
 
-            # order was cancelled
+            # bid was cancelled
             if remaining_volume == 0 and fill_volume != self.bid_original_size:
                 self.bid_id = 0
                 self.bid_size = 0
@@ -251,8 +276,8 @@ class AutoTrader(BaseAutoTrader):
                     self.bid_sequence_number = 0
                     self.bid_original_size = 0
 
+            self.logger.info("Updating BID after a status update from our current bid happened")
             self.update_bid()
-            self.update_ask()
 
         elif client_order_id == self.ask_id:
             self.logger.info("Filled ETF | SELL | seq number {0} | order number {1} | fill_volume {2} | remaining_volume {3}".format(self.ask_sequence_number, self.ask_id, fill_volume, remaining_volume))
@@ -276,17 +301,12 @@ class AutoTrader(BaseAutoTrader):
                     self.ask_original_size = 0
 
             self.update_ask()
-            self.update_bid()
 
         else:
             # we shouldn't receive order status updates of some other order
             assert False
 
         self.check_conditions()
-        
-        if self.bid_size == 0 and self.ask_size == 0 and self.etf_position == 0:
-            self.initialize_bid_and_ask()
-
         self.logger.info("ETF outstanding bid size {0} and ask size {1}".format(self.bid_size, self.ask_size))
         self.update_hedges_if_necessary()
 
@@ -302,8 +322,8 @@ class AutoTrader(BaseAutoTrader):
         If there are less than five prices on a side, then zeros will appear at
         the end of both the prices and volumes arrays.
         """
-        self.logger.info("received trade ticks for instrument %d with sequence number %d", instrument,
-                         sequence_number)
+        # self.logger.info("received trade ticks for instrument %d with sequence number %d", instrument,
+        #                  sequence_number)
 
         # TODO: Update bid/ask prices based on this information
         if instrument == Instrument.ETF:
@@ -314,6 +334,19 @@ class AutoTrader(BaseAutoTrader):
                     self.last_etf_traded_prices.insert(0, (ask_prices[i], ask_volumes[i]))
             while len(self.last_etf_traded_prices) > self.depth_long:
                 self.last_etf_traded_prices.pop()
+
+        self.check_conditions()
+
+        if self.bid_size == 0 and self.ask_size == 0 and self.etf_position == 0:
+            self.initialize_bid_and_ask()
+        else:
+            if self.bid_size == 0:
+                # it will create a new appropiate bid
+                self.update_bid()
+            if self.ask_size == 0:
+                self.update_ask()
+
+        self.check_conditions()
 
     def update_etf_order_book_data(self, sequence_number: int, ask_prices: List[int],
                                      ask_volumes: List[int], bid_prices: List[int], bid_volumes: List[int]) -> None:
@@ -334,6 +367,9 @@ class AutoTrader(BaseAutoTrader):
 
     def initialize_bid_and_ask(self) -> None:
         assert self.bid_size == 0 and self.ask_size == 0
+
+        if self.etf_order_book_sequence_number != self.fut_order_book_sequence_number:
+            return
 
         new_bid_size = 50 
         new_bid_price: int = self.calculate_bid_price()
@@ -425,13 +461,16 @@ class AutoTrader(BaseAutoTrader):
         # ???
         new_bid_price = self.calculate_bid_price()
 
+        self.logger.info("Current bid size {0} current bid price {1} new bid size {2} new bid price {3}".format(self.bid_size, self.bid_price, new_bid_size, new_bid_price))
+
         # see if we should amend the bid
         if self.bid_size > 0 and self.bid_price == new_bid_price and self.bid_size > new_bid_size: 
             # TODO: If self.bid_size < new_bid_size then create a new bid order instead of cancelling and placing a new one
             self.send_amend_order(self.bid_id, new_bid_size)
         # see if we should cancel the bid
         elif self.bid_size > 0:
-            if self.bid_price != new_bid_price:
+            if self.bid_price != new_bid_price and self.bid_sequence_number + self.cancelling_delay <= self.etf_order_book_sequence_number:
+                self.logger.info("Cancelling BID with id {0}".format(self.bid_id))
                 self.send_cancel_order(self.bid_id)
         # see if we should place a new bid given that we don't have any outstanding one
         elif new_bid_size > 0 and new_bid_price > 0:
@@ -454,7 +493,7 @@ class AutoTrader(BaseAutoTrader):
             self.send_amend_order(self.ask_id, new_ask_size)
         # see if we should cancel the ask order
         elif self.ask_size > 0:
-            if self.ask_price != new_ask_price:
+            if self.ask_price != new_ask_price and self.ask_sequence_number + self.cancelling_delay <= self.etf_order_book_sequence_number:
                 self.send_cancel_order(self.ask_id)
         elif new_ask_size > 0 and new_ask_price > 0:
             self.ask_id = next(self.order_ids)
@@ -486,30 +525,45 @@ class AutoTrader(BaseAutoTrader):
         return ask_size
 
     def calculate_true_price(self) -> float:
-        if self.true_price_calculation == "RUNNING_AVERAGE_TRADE_PRICE" and len(self.last_etf_traded_prices) > self.depth_long:
+        if self.true_price_calculation == "RUNNING_AVERAGE_TRADE_PRICE" and len(self.last_etf_traded_prices) >= self.depth_long:
             price_average_short = 0.0
             price_average_long = 0.0
 
             total_volume = 0
             for i in range(self.depth_short):
-                price_average_short += self.last_etf_traded_prices[i][0] * self.last_etf_traded_prices[i][1]
+                # it's adjusted for the volumes
+                price_average_short += self.last_etf_traded_prices[i][0] # * self.last_etf_traded_prices[i][1]
                 total_volume += self.last_etf_traded_prices[i][1]
 
-            price_average_short /= total_volume
+            # price_average_short /= total_volume
+            price_average_short /= self.depth_short
 
             total_volume = 0 
             for i in range(self.depth_long):
-                price_average_long += self.last_etf_traded_prices[i][0] * self.last_etf_traded_prices[i][1]
+                price_average_long += self.last_etf_traded_prices[i][0] # * self.last_etf_traded_prices[i][1]
                 total_volume += self.last_etf_traded_prices[i][1]
 
-            price_average_long /= total_volume
+            # price_average_long /= total_volume
+            price_average_long /= self.depth_long
             
             slope = 2 * (price_average_short - price_average_long) / (self.depth_long - self.depth_short)
-            return (price_average_long + slope * (self.depth_long + 1) * 0.5)
+            # true_price = (price_average_long + slope * (self.depth_long + 1) * 0.5)
+
+            if slope > self.slope_threshold_up:
+                new_true_price = self.true_price + 1
+
+            etf_last_prices = [data[0] for data in self.last_etf_traded_prices]
+            self.logger.info("Length of etf last prices {0}".format(len(etf_last_prices)))
+            self.logger.info("Last ETF traded prices {0} {1} {2} {3} {4}".format(*etf_last_prices))
+            self.logger.info("True Price calculated is {0}".format(true_price))
 
         # we assume the true price calculation is just based on the mid price
         else:
-            return (self.fut_ask_prices[0] + self.fut_bid_prices[0]) * 0.5
+            self.true_price = (self.fut_ask_prices[0] + self.fut_bid_prices[0]) * 0.5
+            self.logger.info("True Price calculated is {0}".format(self.true_price))
+
+
+        return self.true_price
 
     # the price is given in number of tick sizes
     def calculate_bid_price(self) -> int:
@@ -528,7 +582,7 @@ class AutoTrader(BaseAutoTrader):
 
         true_price = self.calculate_true_price()
 
-        one_above_true_price = math.floor((true_price + TICK_SIZE_IN_CENTS) / TICK_SIZE_IN_CENTS) * TICK_SIZE_IN_CENTS
+        one_above_true_price = math.ceil((true_price + TICK_SIZE_IN_CENTS) / TICK_SIZE_IN_CENTS) * TICK_SIZE_IN_CENTS
 
         return one_above_true_price
 
@@ -536,7 +590,7 @@ class AutoTrader(BaseAutoTrader):
         # the actual current market exposure
         current_delta = self.etf_position + self.fut_position
 
-        if self.hedge_ask_id != 0 or self.hedge_bid_id != 0 or self.last_hedged_sequence_number + self.sequence_number_heding_delay < self.etf_order_book_sequence_number:
+        if self.hedge_ask_id != 0 or self.hedge_bid_id != 0 or self.last_hedged_sequence_number + self.sequence_number_heding_delay > self.etf_order_book_sequence_number:
             return
 
         # TODO: Check that we haven't sent the hedge order already

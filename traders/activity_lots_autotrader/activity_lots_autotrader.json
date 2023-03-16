@@ -8,7 +8,7 @@
     "Name": "info.dat"
   },
   "TeamName": "activity_lots_autotrader",
-  "Secret": "not_a_secret",
+  "Secret": "secret",
   "Parameters": {
     "LOT_SIZE": 10,
     "HIST_LENGTH": 10,
