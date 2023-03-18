@@ -1,0 +1,20 @@
+{
+    "Execution": {
+      "Host": "127.0.0.1",
+      "Port": 12345
+    },
+    "Information": {
+      "Type": "mmap",
+      "Name": "info.dat"
+    },
+    "TeamName": "waluigi",
+    "Secret": "secret",
+    "Parameters": {
+      "drift_delay": 3,
+      "sequence_number_hedging_delay": 600,
+      "adjust_order_enabled": 1,
+      "cancelling_delay": 0.01,
+      "sequence_numbers_to_be_sure_we_are_hedged": 2
+    }
+  }
+  

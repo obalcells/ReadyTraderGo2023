@@ -1,0 +1,8 @@
+{   
+    "drift_delay": [0,3,5],
+    "sequence_number_hedging_delay": [0,100,500], 
+    "MarketDataFile": ["data/market_data2.csv"],
+    "sequence_numbers_to_be_sure_we_are_hedged": [0, 2],
+    "adjust_order_enabled": [0, 1], 
+    "cancelling_delay": [0.01]
+}
