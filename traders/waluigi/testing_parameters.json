@@ -1,8 +1,9 @@
 {   
-    "drift_delay": [0,3,5],
-    "sequence_number_hedging_delay": [0,100,500], 
-    "MarketDataFile": ["data/market_data2.csv"],
+    "drift_delay": [3],
+    "sequence_number_hedging_delay": [600], 
+    "MarketDataFile": ["data/market_data1.csv", "data/market_data2.csv", "data/market_data3.csv", "data/market_data4.csv"],
     "sequence_numbers_to_be_sure_we_are_hedged": [0, 2],
-    "adjust_order_enabled": [0, 1], 
-    "cancelling_delay": [0.01]
+    "adjust_order_enabled": [1], 
+    "cancelling_delay": [0.01],
+    "gamma": [0, 0.0001, 0.001, 0.005, 0.1]
 }

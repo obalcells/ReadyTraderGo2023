@@ -73,7 +73,7 @@ class AutoTrader(BaseAutoTrader):
         self.etf_ask_volumes = []
         self.etf_bid_prices = [] 
         self.etf_bid_volumes = [] 
-        self.fut_ask_prices = [] 
+        self.fut_ask_prices = []
         self.fut_ask_volumes = []
         self.fut_bid_prices = []
         self.fut_bid_volumes = [] 
@@ -90,10 +90,8 @@ class AutoTrader(BaseAutoTrader):
         self.drift_delay = config["Parameters"]["drift_delay"] #3
         self.cancelling_delay = config["Parameters"]["cancelling_delay"] # 0.01
         self.lag_factor = 0.0
-        self.use_effective_etf_midprice = 0 
-
-        self.gamma = 5 
-        self.A = 1
+        self.use_effective_etf_midprice = 0
+        self.gamma = config["Parameters"]["gamma"] # 0.005
 
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
@@ -433,7 +431,7 @@ class AutoTrader(BaseAutoTrader):
         self.logger.info("Calculated reservation price is {0}".format(reservation_price))
 
         one_above_true_price = math.ceil((reservation_price + TICK_SIZE_IN_CENTS) / TICK_SIZE_IN_CENTS) * TICK_SIZE_IN_CENTS
-
+        self.logger.warn("ask price one above {0}, reservation price {1}".format(one_above_true_price,reservation_price))
         return one_above_true_price
 
     def calculate_reservation_price(self) -> float:
@@ -446,7 +444,7 @@ class AutoTrader(BaseAutoTrader):
         sigma_squared = self.calculate_sigma_squared() 
         gamma = self.gamma
         # TODO: Try without this factor (T - t)
-        t_diff = (self.last_hedged_sequence_number + self.sequence_number_hedging_delay - self.etf_order_book_sequence_number) / self.sequence_number_hedging_delay
+        t_diff = 1 - (self.last_hedged_sequence_number + self.sequence_number_hedging_delay - self.etf_order_book_sequence_number) / self.sequence_number_hedging_delay
 
         r = s - q * gamma * sigma_squared * t_diff
 
@@ -466,7 +464,7 @@ class AutoTrader(BaseAutoTrader):
 
         midprice_diff = etf_midprice - fut_midprice
 
-        self.true_price = fut_midprice + midprice_diff * self.lag_factor
+        self.true_price = (fut_midprice + midprice_diff * self.lag_factor) 
 
         self.logger.info("True Price calculated is {0}".format(self.true_price))
 
