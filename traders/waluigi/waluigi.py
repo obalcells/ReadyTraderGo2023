@@ -78,7 +78,7 @@ class AutoTrader(BaseAutoTrader):
         self.fut_bid_prices = []
         self.fut_bid_volumes = [] 
 
-        self.last_etf_traded_prices = []
+        self.last_30_etf_trades = []
 
         # parameters to tweak
         self.true_price_calculation = "MID_PRICE"
@@ -86,12 +86,10 @@ class AutoTrader(BaseAutoTrader):
         self.depth_short = 5 
 
         self.sequence_number_hedging_delay = config["Parameters"]["sequence_number_hedging_delay"] # 600 
-        self.adjust_order_enabled = config["Parameters"]["adjust_order_enabled"] # True
         self.drift_delay = config["Parameters"]["drift_delay"] #3
         self.cancelling_delay = config["Parameters"]["cancelling_delay"] # 0.01
-        self.lag_factor = 0.0
-        self.use_effective_etf_midprice = 0
         self.gamma = config["Parameters"]["gamma"] # 0.005
+        self.volume_adjustment_constant = config["Parameters"]["volume_adjustment_constant"]
 
 
     def on_error_message(self, client_order_id: int, error_message: bytes) -> None:
@@ -267,11 +265,11 @@ class AutoTrader(BaseAutoTrader):
         if instrument == Instrument.ETF:
             for i in range(len(bid_prices))[::-1]:
                 if bid_volumes[i] > 0:
-                    self.last_etf_traded_prices.insert(0, (bid_prices[i], bid_volumes[i]))
+                    self.last_30_etf_trades.insert(0, (bid_prices[i], bid_volumes[i]))
                 if ask_volumes[i] > 0:
-                    self.last_etf_traded_prices.insert(0, (ask_prices[i], ask_volumes[i]))
-            while len(self.last_etf_traded_prices) > self.depth_long:
-                self.last_etf_traded_prices.pop()
+                    self.last_30_etf_trades.insert(0, (ask_prices[i], ask_volumes[i]))
+            while len(self.last_30_etf_trades) > self.depth_long:
+                self.last_30_etf_trades.pop()
 
         self.check_conditions()
 
@@ -335,8 +333,6 @@ class AutoTrader(BaseAutoTrader):
 
         new_ask_size = self.calculate_ask_size()
         new_ask_price = self.calculate_ask_price(new_ask_size)
-        self.logger.info("Our new ask size should be {0}".format(new_ask_size))
-        self.logger.info("The ask price is {0}".format(new_ask_price))
 
         # see if we should amend the ask order
         if self.ask_size > 0 and self.ask_price == new_ask_price and self.ask_size > new_ask_size: 
@@ -417,39 +413,50 @@ class AutoTrader(BaseAutoTrader):
 
         reservation_price = self.calculate_reservation_price()
 
-        one_below_true_price = math.floor((reservation_price - TICK_SIZE_IN_CENTS) / TICK_SIZE_IN_CENTS) * TICK_SIZE_IN_CENTS
+        delta = self.calculate_delta()
 
-        return one_below_true_price
+        reservation_price -= delta * 0.5
 
-    # r = s - q * gamma * sigma^2 * (T - t)
+        rounded_price = math.floor(reservation_price / TICK_SIZE_IN_CENTS) * TICK_SIZE_IN_CENTS
+
+        return rounded_price 
 
     def calculate_ask_price(self, ask_size) -> int:
         assert self.market_data_ready()
 
         reservation_price = self.calculate_reservation_price()
 
-        self.logger.info("Calculated reservation price is {0}".format(reservation_price))
+        delta = self.calculate_delta()
 
-        one_above_true_price = math.ceil((reservation_price + TICK_SIZE_IN_CENTS) / TICK_SIZE_IN_CENTS) * TICK_SIZE_IN_CENTS
-        self.logger.warn("ask price one above {0}, reservation price {1}".format(one_above_true_price,reservation_price))
-        return one_above_true_price
+        reservation_price += delta * 0.5
 
-    def calculate_reservation_price(self) -> float:
+        rounded_price = math.ceil(reservation_price / TICK_SIZE_IN_CENTS) * TICK_SIZE_IN_CENTS
+
+        return rounded_price
+
+    def calculate_delta(self) -> float:
         assert self.market_data_ready()
 
-        # self.update_gamma
+        sigma_squared = self.calculate_sigma_squared() 
+        gamma = self.gamma
+        t_diff = 1 - (self.last_hedged_sequence_number + self.sequence_number_hedging_delay - self.etf_order_book_sequence_number) / self.sequence_number_hedging_delay
+        kappa = self.volume_adjustment_constant * self.calculate_volume_etf()
+
+        delta = gamma * sigma_squared * t_diff + 2 * math.log(1 + gamma / kappa) / gamma
+
+        return delta
+
+    # r = s - q * gamma * sigma^2 * (T - t)
+    def calculate_reservation_price(self) -> float:
+        assert self.market_data_ready()
 
         s = self.calculate_true_price()
         q = self.etf_position
         sigma_squared = self.calculate_sigma_squared() 
         gamma = self.gamma
-        # TODO: Try without this factor (T - t)
         t_diff = 1 - (self.last_hedged_sequence_number + self.sequence_number_hedging_delay - self.etf_order_book_sequence_number) / self.sequence_number_hedging_delay
 
         r = s - q * gamma * sigma_squared * t_diff
-
-        self.logger.info("Reservation price r = {0} = s - q * gamma * sigma^2 * (T - t)".format(r))
-        self.logger.info("                  s = {0}, q = {1}, gamma = {2}, sigma^2 = {3}, (T-t) = {4}".format(s, q, gamma, sigma_squared, t_diff))
 
         return r
 
@@ -457,34 +464,25 @@ class AutoTrader(BaseAutoTrader):
         # true price is the midprice of the future + the difference now times some lag factor
         fut_midprice = (self.fut_ask_prices[0] + self.fut_bid_prices[0]) * 0.5
 
-        if self.use_effective_etf_midprice == 1:
-            etf_midprice = self.calculate_effective_etf_midprice(order_size)
-        else:
-            etf_midprice = (self.etf_ask_prices[0] + self.etf_bid_prices[0]) * 0.5
-
-        midprice_diff = etf_midprice - fut_midprice
-
-        self.true_price = (fut_midprice + midprice_diff * self.lag_factor) 
-
-        self.logger.info("True Price calculated is {0}".format(self.true_price))
+        self.true_price = fut_midprice 
 
         return self.true_price
 
     def calculate_sigma_squared(self) -> float:
-        assert len(self.last_etf_traded_prices) > 0
+        assert len(self.last_30_etf_trades) > 0
 
         mean_price = 0.0
-        for price, volume in self.last_etf_traded_prices:
+        for price, volume in self.last_30_etf_trades:
             mean_price += price / TICK_SIZE_IN_CENTS
-        mean_price /= len(self.last_etf_traded_prices)
+        mean_price /= len(self.last_30_etf_trades)
 
         sigma_squared = 0.0
-        for price, volume in self.last_etf_traded_prices:
-            sigma_squared += ((price/TICK_SIZE_IN_CENTS - mean_price) * (price/TICK_SIZE_IN_CENTS - mean_price)) / len(self.last_etf_traded_prices)
+        for price, volume in self.last_30_etf_trades:
+            sigma_squared += ((price/TICK_SIZE_IN_CENTS - mean_price) * (price/TICK_SIZE_IN_CENTS - mean_price)) / len(self.last_30_etf_trades)
         
         self.logger.info("Calculated sigma_squared is {0}".format(sigma_squared))
         output_str = ""
-        for price, volume in self.last_etf_traded_prices:
+        for price, volume in self.last_30_etf_trades:
             output_str += str(price/TICK_SIZE_IN_CENTS) + "  "
         self.logger.info("Last ETF traded prices {0}".format(output_str))
 
@@ -492,9 +490,14 @@ class AutoTrader(BaseAutoTrader):
 
         return sigma_squared 
 
+    # computes the total volume of the last 30 etf trades
+    def calculate_volume_etf(self) -> int:
+        total_volume = 0
 
+        for price, volume in self.last_30_etf_trades:
+            total_volume += volume
 
-
+        return total_volume
 
 
 
@@ -558,7 +561,7 @@ class AutoTrader(BaseAutoTrader):
             return False
         if self.fut_ask_volumes[0] == 0 or self.fut_ask_prices[0] == 0:
             return False
-        if len(self.last_etf_traded_prices) == 0:
+        if len(self.last_30_etf_trades) == 0:
             return False
         return True
 

@@ -1,0 +1,63 @@
+{
+    "Execution": {
+        "Host": "127.0.0.1",
+        "Port": 12345
+    },
+    "Information": {
+        "Type": "mmap",
+        "Name": "info.dat"
+    },
+    "TeamName": "waluigi",
+    "Secret": "secret",
+    "Parameters": {
+        "MarketDataFile": "data/market_data2.csv",
+        "drift_delay": 3,
+        "sequence_number_hedging_delay": 600,
+        "cancelling_delay": 0.01,
+        "gamma": 0.001,
+        "volume_adjustment_constant": 1e-06
+    },
+    "Exchange": {
+        "Engine": {
+            "MarketDataFile": "data/market_data2.csv",
+            "MarketEventInterval": 0.05,
+            "MarketOpenDelay": 5.0,
+            "MatchEventsFile": "match_events.csv",
+            "ScoreBoardFile": "score_board.csv",
+            "Speed": 2.0,
+            "TickInterval": 0.25
+        },
+        "Execution": {
+            "Host": "127.0.0.1",
+            "Port": 12345
+        },
+        "Fees": {
+            "Maker": -0.0001,
+            "Taker": 0.0002
+        },
+        "Hud": {
+            "Host": "127.0.0.1",
+            "Port": 12347
+        },
+        "Information": {
+            "Type": "mmap",
+            "Name": "info.dat"
+        },
+        "Instrument": {
+            "EtfClamp": 0.002,
+            "TickSize": 1.0
+        },
+        "Limits": {
+            "ActiveOrderCountLimit": 10,
+            "ActiveVolumeLimit": 200,
+            "MessageFrequencyInterval": 1.0,
+            "MessageFrequencyLimit": 50,
+            "PositionLimit": 100
+        },
+        "Traders": {
+            "humming_trader": "secret",
+            "waluigi": "secret"
+        },
+        "MarketDataFile": "data/market_data2.csv"
+    }
+}

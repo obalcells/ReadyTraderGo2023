@@ -72,9 +72,6 @@ class Order(object):
             "total_fees=%d}"
         return s % args
 
-    def other_str(self):
-        return "[ {0} {1} price={2} remaining={3} init_volume={4} id={5} ]".format("BUY" if self.side == Side.BUY else "SELL", "ETF" if self.instrument == Instrument.ETF else "FUT", self.price, self.remaining_volume, self.volume, self.client_order_id)
-
 class OrderBook(object):
     """A collection of orders arranged by the price-time priority principle."""
 

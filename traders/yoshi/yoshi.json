@@ -1,0 +1,19 @@
+{
+    "Execution": {
+      "Host": "127.0.0.1",
+      "Port": 12345
+    },
+    "Information": {
+      "Type": "mmap",
+      "Name": "info.dat"
+    },
+    "TeamName": "yoshi",
+    "Secret": "secret",
+    "Parameters": {
+      "drift_delay": 3,
+      "sequence_number_hedging_delay": 600,
+      "cancelling_delay": 0.01,
+      "gamma": 0.001,
+      "volume_adjustment_constant": 0.0001
+    }
+  }
