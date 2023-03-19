@@ -29,7 +29,7 @@ import json
 
 import ready_trader_go.exchange
 import ready_trader_go.trader
-# from ready_trader_go.modified_event_source import ModifiedRecordedEventSource
+from ready_trader_go.modified_event_source import ModifiedRecordedEventSource
 
 try:
     from ready_trader_go.hud.__main__ import main as hud_main, replay as hud_replay
@@ -205,8 +205,8 @@ def debug_competitor(args) -> None:
     tick_size = 1.00
     etf_clamp = 0.002
     # do nothing
-    # with args.filename.open("r", newline="") as csv_file:
-    #     ModifiedRecordedEventSource.from_csv(csv_file, etf_clamp, tick_size)
+    with args.filename.open("r", newline="") as csv_file:
+        ModifiedRecordedEventSource.from_csv(csv_file, etf_clamp, tick_size)
 
 def main() -> None:
     """Process command line arguments and execute the given command."""

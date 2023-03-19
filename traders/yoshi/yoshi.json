@@ -12,7 +12,7 @@
     "Parameters": {
       "drift_delay": 3,
       "sequence_number_hedging_delay": 600,
-      "cancelling_delay": 0.01,
+      "cancelling_delay": 1,
       "gamma": 0.001,
       "volume_adjustment_constant": 0.0001
     }
